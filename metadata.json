@@ -1,0 +1,6 @@
+{
+  "name": "Sistema de Espetinho & Marmitaria - Gestão e Caixa",
+  "description": "Sistema completo para gestão de espetinho e marmitaria com seletor de módulos (Sistema Espeto e Sistema Marmitaria), PDV Ágil, Cardápio do Dia, KDS, Gestão de Entregas e Controle de Acesso por Usuário.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

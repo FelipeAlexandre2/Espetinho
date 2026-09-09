@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* Regras Globais de Impressão (Celular & Computador) */
+@media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+
+  /* Oculta tudo na tela por padrão durante a impressão */
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  /* Elementos com .no-print são removidos do fluxo */
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Torna visível estritamente a área do cupom / comprovante ou relatório */
+  .printable-receipt,
+  .printable-receipt *,
+  .printable-report,
+  .printable-report * {
+    visibility: visible !important;
+  }
+
+  /* Impressão de Cupom Térmico (Comprovante de Pedido / Caixa) */
+  .printable-receipt {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    margin: 0 auto !important;
+    padding: 8px 6px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: 999999 !important;
+  }
+
+  /* Impressão de Relatórios Administrativos em A4 */
+  .printable-report {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: 999999 !important;
+  }
+
+  /* Evita quebras de página no meio de itens do cupom */
+  .printable-receipt .receipt-item,
+  .printable-report tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
+
+

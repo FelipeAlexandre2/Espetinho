@@ -1,8 +1,16 @@
 export type Category = 
+  | 'espetos'
+  | 'pratos_executivos'
+  | 'batatas_recheadas'
+  | 'pasteis'
+  | 'lanches'
+  | 'porcoes'
+  | 'caldos'
+  | 'bebidas'
+  | 'adicionais'
   | 'espetos_tradicionais'
   | 'espetos_especiais'
   | 'acompanhamentos'
-  | 'bebidas'
   | 'sobremesas';
 
 export type MeatPoint = 'mal_passada' | 'ao_ponto' | 'bem_passada';
@@ -70,12 +78,12 @@ export type ReceiptPaperWidth = '80mm' | '58mm' | 'a4';
 export type ReceiptType = 'cliente' | 'cozinha' | 'pre_conta';
 
 export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
-  restaurantName: 'ESPETINHO DO CHEFE',
-  subtitle: 'Espetos & Porções na Brasa',
+  restaurantName: 'MARESIA ESPETINHO E BATATA',
+  subtitle: 'Espetos, Batatas Recheadas, Pastéis & Porções',
   cnpj: '12.345.678/0001-90',
-  address: 'Rua da Brasa, 100 - Centro',
-  phone: '(11) 98765-4321',
-  footerMessage: 'Obrigado pela preferência! Volte sempre 🔥',
+  address: 'Horário: 18:00 - 23:00',
+  phone: '(67) 99125-6083',
+  footerMessage: 'Instagram: @maresia_espetos_e_batatas • Volte sempre! 🔥',
   autoCut: true,
 };
 

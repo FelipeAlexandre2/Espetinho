@@ -3,7 +3,7 @@ import { INITIAL_PRODUCTS, INITIAL_STOCK, INITIAL_ORDERS, INITIAL_CASH_SHIFT, IN
 import { INITIAL_MARMITA_OPTIONS, INITIAL_MARMITA_SIZES, INITIAL_MARMITA_ORDERS, INITIAL_MARMITA_SETTINGS } from '../data/marmitariaData';
 
 const KEYS = {
-  PRODUCTS: 'espetinho_products_v1',
+  PRODUCTS: 'maresia_products_v2',
   STOCK: 'espetinho_stock_v1',
   ORDERS: 'espetinho_orders_v1',
   CASH_SHIFT: 'espetinho_cash_shift_v1',

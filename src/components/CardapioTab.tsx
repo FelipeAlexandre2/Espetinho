@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Product, Category, Order, MeatPoint, TABLES, AppUser, hasPermission, canUserCreateOrder } from '../types';
-import { Plus, Minus, Search, Edit2, Trash2, Check, X, Flame, Package, Zap, Tag, DollarSign, Image as ImageIcon, Utensils, CheckCircle2, Lock } from 'lucide-react';
+import { Plus, Minus, Search, Edit2, Trash2, Check, X, Flame, Package, Zap, Tag, DollarSign, Image as ImageIcon, Utensils, CheckCircle2, Lock, QrCode } from 'lucide-react';
+import { QrCodeModal } from './QrCodeModal';
 
 interface CardapioTabProps {
   products: Product[];
@@ -9,15 +10,20 @@ interface CardapioTabProps {
   onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
   onCreateOrder?: (order: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => void;
+  onOpenCustomerView?: (tableName: string) => void;
 }
 
 const CATEGORIES: { id: Category | 'todos'; label: string; icon: string }[] = [
   { id: 'todos', label: 'Todos os Itens', icon: '🍽️' },
-  { id: 'espetos_tradicionais', label: 'Espetos Tradicionais', icon: '🍡' },
-  { id: 'espetos_especiais', label: 'Espetos Especiais', icon: '🥩' },
-  { id: 'acompanhamentos', label: 'Acompanhamentos', icon: '🥖' },
-  { id: 'bebidas', label: 'Bebidas Geladas', icon: '🍺' },
-  { id: 'sobremesas', label: 'Sobremesas', icon: '🍮' },
+  { id: 'espetos', label: 'Espetos & Jantinha', icon: '🍢' },
+  { id: 'pratos_executivos', label: 'Pratos Executivos', icon: '🍛' },
+  { id: 'batatas_recheadas', label: 'Batata Recheada', icon: '🥔' },
+  { id: 'pasteis', label: 'Pastéis', icon: '🥟' },
+  { id: 'lanches', label: 'Lanches & Dogs', icon: '🍔' },
+  { id: 'porcoes', label: 'Porções', icon: '🍟' },
+  { id: 'caldos', label: 'Caldos', icon: '🥣' },
+  { id: 'bebidas', label: 'Bebidas', icon: '🍺' },
+  { id: 'adicionais', label: 'Adicionais', icon: '➕' },
 ];
 
 export const CardapioTab: React.FC<CardapioTabProps> = ({
@@ -27,6 +33,7 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
   onUpdateProduct,
   onDeleteProduct,
   onCreateOrder,
+  onOpenCustomerView,
 }) => {
   const canManageMenu = hasPermission(currentUser, 'manage_menu');
   const canCreateOrder = canUserCreateOrder(currentUser);
@@ -34,6 +41,7 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<Category | 'todos'>('todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Add to Table Modal state
@@ -148,20 +156,32 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
           </div>
         </div>
 
-        {canManageMenu ? (
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center justify-center space-x-2 bg-red-500 hover:bg-red-600 text-white font-extrabold text-xs sm:text-sm px-4 py-2.5 sm:py-3 rounded-xl shadow-md shadow-red-500/20 transition-all cursor-pointer active:scale-95 shrink-0"
+            type="button"
+            onClick={() => setIsQrModalOpen(true)}
+            className="inline-flex items-center justify-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs sm:text-sm px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-md transition-all cursor-pointer active:scale-95 border border-slate-750"
+            title="Gerar e imprimir QR Code das mesas para autoatendimento dos clientes"
           >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>Novo Produto</span>
+            <QrCode className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
+            <span>QR Code das Mesas</span>
           </button>
-        ) : (
-          <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-500 px-3 py-2 rounded-xl text-xs font-bold">
-            <Lock className="w-3.5 h-3.5 text-slate-400" />
-            <span>Modo Consulta</span>
-          </div>
-        )}
+
+          {canManageMenu ? (
+            <button
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center justify-center space-x-2 bg-red-500 hover:bg-red-600 text-white font-extrabold text-xs sm:text-sm px-4 py-2.5 sm:py-3 rounded-xl shadow-md shadow-red-500/20 transition-all cursor-pointer active:scale-95 shrink-0"
+            >
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>Novo Produto</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-500 px-3 py-2 rounded-xl text-xs font-bold">
+              <Lock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Modo Consulta</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filter Chips & Search Bar */}
@@ -456,11 +476,15 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                     onChange={(e) => setFormData({ ...formData, category: e.target.value as Category })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
                   >
-                    <option value="espetos_tradicionais">Espetos Tradicionais</option>
-                    <option value="espetos_especiais">Espetos Especiais</option>
-                    <option value="acompanhamentos">Acompanhamentos</option>
+                    <option value="espetos">Espetos & Jantinha</option>
+                    <option value="pratos_executivos">Pratos Executivos</option>
+                    <option value="batatas_recheadas">Batatas Recheadas</option>
+                    <option value="pasteis">Pastéis</option>
+                    <option value="lanches">Lanches & Hot Dogs</option>
+                    <option value="porcoes">Porções</option>
+                    <option value="caldos">Caldos</option>
                     <option value="bebidas">Bebidas</option>
-                    <option value="sobremesas">Sobremesas</option>
+                    <option value="adicionais">Adicionais</option>
                   </select>
                 </div>
 
@@ -797,6 +821,13 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
           </button>
         </div>
       )}
+
+      {/* QR Code & Tables Modal */}
+      <QrCodeModal
+        isOpen={isQrModalOpen}
+        onClose={() => setIsQrModalOpen(false)}
+        onOpenCustomerView={onOpenCustomerView}
+      />
     </div>
   );
 };

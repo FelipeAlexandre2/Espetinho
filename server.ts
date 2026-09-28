@@ -258,19 +258,26 @@ async function startServer() {
 
   app.post('/api/users/verify-pin', async (req, res) => {
     const { userId, pin } = req.body;
-    let targetUser = memoryUsers.find((u) => u.id === userId);
+    let targetUser = userId 
+      ? memoryUsers.find((u) => u.id === userId)
+      : memoryUsers.find((u) => u.pin === pin && u.status === 'ativo');
 
     if (!targetUser && db) {
       try {
-        const found = await db.select().from(users).where(eq(users.id, userId));
-        if (found.length > 0) targetUser = found[0] as any;
+        if (userId) {
+          const found = await db.select().from(users).where(eq(users.id, userId));
+          if (found.length > 0) targetUser = found[0] as any;
+        } else if (pin) {
+          const found = await db.select().from(users).where(eq(users.pin, pin));
+          if (found.length > 0) targetUser = found[0] as any;
+        }
       } catch (e) {
         console.error('Error fetching user for pin verification:', e);
       }
     }
 
     if (!targetUser) {
-      return res.status(404).json({ valid: false, message: 'Usuário não encontrado.' });
+      return res.status(404).json({ valid: false, message: 'Usuário ou PIN não localizado.' });
     }
 
     if (targetUser.pin === pin) {
@@ -363,6 +370,9 @@ async function startServer() {
 
   app.post('/api/products', async (req, res) => {
     const item = req.body;
+    if (!item.id) {
+      item.id = 'prod-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    }
     const existingIndex = memoryProducts.findIndex((p) => p.id === item.id);
     if (existingIndex >= 0) {
       memoryProducts[existingIndex] = item;
@@ -385,10 +395,12 @@ async function startServer() {
 
   app.put('/api/products/:id', async (req, res) => {
     const { id } = req.params;
-    const item = req.body;
+    const item = { ...req.body, id };
     const index = memoryProducts.findIndex((p) => p.id === id);
     if (index >= 0) {
       memoryProducts[index] = { ...memoryProducts[index], ...item };
+    } else {
+      memoryProducts.push(item);
     }
 
     if (db) {
@@ -398,7 +410,7 @@ async function startServer() {
         console.error('Failed to update product in db', e);
       }
     }
-    res.json(item);
+    res.json(memoryProducts.find((p) => p.id === id) || item);
   });
 
   app.delete('/api/products/:id', async (req, res) => {
@@ -431,7 +443,24 @@ async function startServer() {
   });
 
   app.post('/api/orders', async (req, res) => {
-    const order = req.body;
+    const order = { ...req.body };
+    if (!order.id) {
+      order.id = 'ord-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    }
+    if (!order.orderNumber) {
+      const maxNum = memoryOrders.reduce((max, o) => Math.max(max, o.orderNumber || 0), 100);
+      order.orderNumber = maxNum + 1;
+    }
+    if (!order.createdAt) {
+      order.createdAt = new Date().toISOString();
+    }
+    if (order.total === undefined) {
+      const itemsSum = Array.isArray(order.items) 
+        ? order.items.reduce((s: number, i: any) => s + (Number(i.product?.price || 0) * Number(i.quantity || 1)), 0)
+        : 0;
+      order.total = itemsSum;
+    }
+
     const index = memoryOrders.findIndex((o) => o.id === order.id);
     if (index >= 0) {
       memoryOrders[index] = order;
@@ -460,10 +489,12 @@ async function startServer() {
 
   app.put('/api/orders/:id', async (req, res) => {
     const { id } = req.params;
-    const order = req.body;
+    const order = { ...req.body, id };
     const index = memoryOrders.findIndex((o) => o.id === id);
     if (index >= 0) {
       memoryOrders[index] = { ...memoryOrders[index], ...order };
+    } else {
+      memoryOrders.unshift(order);
     }
 
     if (db) {
@@ -476,7 +507,43 @@ async function startServer() {
         console.error('Failed to update order in db', e);
       }
     }
-    res.json(order);
+    res.json(memoryOrders.find((o) => o.id === id) || order);
+  });
+
+  app.patch('/api/orders/:id/status', async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    const index = memoryOrders.findIndex((o) => o.id === id);
+    if (index >= 0) {
+      memoryOrders[index] = { ...memoryOrders[index], status };
+    }
+
+    if (db) {
+      try {
+        await db.update(orders).set({ status }).where(eq(orders.id, id));
+      } catch (e) {
+        console.error('Failed to update order status in db', e);
+      }
+    }
+    res.json(memoryOrders.find((o) => o.id === id) || { id, status });
+  });
+
+  app.patch('/api/orders/:id', async (req, res) => {
+    const { id } = req.params;
+    const partial = req.body;
+    const index = memoryOrders.findIndex((o) => o.id === id);
+    if (index >= 0) {
+      memoryOrders[index] = { ...memoryOrders[index], ...partial };
+    }
+
+    if (db) {
+      try {
+        await db.update(orders).set(partial).where(eq(orders.id, id));
+      } catch (e) {
+        console.error('Failed to patch order in db', e);
+      }
+    }
+    res.json(memoryOrders.find((o) => o.id === id) || { id, ...partial });
   });
 
   app.delete('/api/orders/:id', async (req, res) => {

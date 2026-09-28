@@ -130,7 +130,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentModule === 'marmitaria' ? (
                     <>Marmitaria<span className="text-orange-500">Pro</span></>
                   ) : (
-                    <>Espeto<span className="text-red-500">Pro</span></>
+                    <>Maresia <span className="text-red-500">Espetos & Batata</span></>
                   )}
                 </h1>
                 <span className={`hidden xs:inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold border ${
@@ -139,13 +139,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'bg-red-500/10 text-red-400 border-red-500/20'
                 }`}>
                   <Sparkles className="w-3 h-3 mr-1" />
-                  {currentModule === 'marmitaria' ? 'Marmitex & Delivery' : 'Grelha & Bar'}
+                  {currentModule === 'marmitaria' ? 'Marmitex & Delivery' : '18:00 - 23:00'}
                 </span>
               </div>
               <p className="text-[10px] sm:text-xs text-slate-400 hidden sm:block">
                 {currentModule === 'marmitaria'
                   ? 'PDV de Montagem de Marmitas, KDS & Expedição'
-                  : 'Sistema de Gestão, Churrasqueira & Caixa POS'}
+                  : 'Espetinho, Batata Recheada, Pastéis & Porções'}
               </p>
             </div>
           </div>

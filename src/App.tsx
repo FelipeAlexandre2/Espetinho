@@ -38,6 +38,7 @@ import { ModuleSelectModal } from './components/ModuleSelectModal';
 import { StartupScreen } from './components/StartupScreen';
 import { ReceiptModal } from './components/ReceiptModal';
 import { AccessDeniedView } from './components/AccessDeniedView';
+import { CustomerMenu } from './components/CustomerMenu';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('caixa');
@@ -48,6 +49,20 @@ export default function App() {
     const remembered = localStorage.getItem('gastro_remember_startup_choice') === 'true';
     if (remembered) return false;
     return true;
+  });
+
+  // Customer QR Code Menu Mode (detected from URL ?view=cardapio or ?mesa=... or preview)
+  const [isCustomerMode, setIsCustomerMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'cardapio' || Boolean(params.get('mesa')) || window.location.hash.includes('cardapio');
+  });
+
+  const [customerTable, setCustomerTable] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'Mesa 01';
+    const params = new URLSearchParams(window.location.search);
+    const mesaParam = params.get('mesa');
+    return mesaParam ? decodeURIComponent(mesaParam) : 'Mesa 01';
   });
 
   // Core app state
@@ -100,6 +115,18 @@ export default function App() {
     fetchLogsFromApi().then((apiLogs) => {
       if (apiLogs && apiLogs.length > 0) setLogs(apiLogs);
     });
+  }, []);
+
+  // Polling backend orders periodically to automatically receive orders placed by customers via QR Code
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchOrdersFromApi().then((apiOrders) => {
+        if (apiOrders && apiOrders.length > 0) {
+          setOrders(apiOrders);
+        }
+      });
+    }, 4000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   // Sync state changes with localStorage
@@ -1074,6 +1101,31 @@ export default function App() {
     (o) => o.status === 'pendente' || o.status === 'em_montagem' || o.status === 'pronto'
   ).length;
 
+  // Render Interactive Customer QR Code Menu if in customer view
+  if (isCustomerMode) {
+    return (
+      <CustomerMenu
+        products={products}
+        initialTable={customerTable}
+        onExitCustomerMode={() => {
+          setIsCustomerMode(false);
+          window.history.replaceState({}, '', window.location.pathname);
+        }}
+        onOrderCreated={(newOrder) => {
+          setOrders((prev) => [newOrder, ...prev]);
+          addAuditLog(
+            'pedidos',
+            'pedido_criado',
+            `📱 Pedido via QR Code (${newOrder.tableOrCustomer})`,
+            `Cliente enviou pedido #${newOrder.orderNumber} com ${newOrder.items.length} itens (Total R$ ${newOrder.total.toFixed(2)}).`,
+            'success',
+            { orderNumber: newOrder.orderNumber, table: newOrder.tableOrCustomer, total: newOrder.total }
+          );
+        }}
+      />
+    );
+  }
+
   // Render dedicated Startup Screen when system starts or requested by operator
   if (showStartupScreen) {
     return (
@@ -1219,6 +1271,10 @@ export default function App() {
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
                   onCreateOrder={handleCreateOrder}
+                  onOpenCustomerView={(tableName) => {
+                    setCustomerTable(tableName);
+                    setIsCustomerMode(true);
+                  }}
                 />
               )}
 

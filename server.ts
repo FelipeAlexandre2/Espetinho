@@ -429,16 +429,24 @@ async function startServer() {
 
   // ================= ORDERS API =================
   app.get('/api/orders', async (req, res) => {
-    if (!db) return res.json(memoryOrders);
+    const sanitize = (list: any[]) =>
+      (list || []).map((o: any) => ({
+        ...o,
+        items: Array.isArray(o?.items) ? o.items : [],
+        payments: Array.isArray(o?.payments) ? o.payments : [],
+      }));
+
+    if (!db) return res.json(sanitize(memoryOrders));
     try {
       const list = await db.select().from(orders);
-      if (list.length > 0) {
-        memoryOrders = list as any;
-        return res.json(list);
+      if (list && list.length > 0) {
+        const sanitized = sanitize(list);
+        memoryOrders = sanitized as any;
+        return res.json(sanitized);
       }
-      return res.json(memoryOrders);
+      return res.json(sanitize(memoryOrders));
     } catch (err) {
-      return res.json(memoryOrders);
+      return res.json(sanitize(memoryOrders));
     }
   });
 
@@ -473,11 +481,13 @@ async function startServer() {
         await db.insert(orders).values({
           ...order,
           items: order.items as any,
+          payments: order.payments as any,
         }).onConflictDoUpdate({
           target: orders.id,
           set: {
             ...order,
             items: order.items as any,
+            payments: order.payments as any,
           },
         });
       } catch (e) {

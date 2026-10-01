@@ -45,7 +45,16 @@ export interface OrderItem {
   category?: Category;
 }
 
-export type PaymentMethod = 'pix' | 'credito' | 'debito' | 'dinheiro';
+export type PaymentMethod = 'pix' | 'credito' | 'debito' | 'dinheiro' | 'multiplo';
+
+export interface PaymentSplit {
+  id?: string;
+  method: 'pix' | 'credito' | 'debito' | 'dinheiro';
+  amount: number;
+  cashReceived?: number;
+  change?: number;
+  note?: string;
+}
 
 export interface Order {
   id: string;
@@ -60,6 +69,8 @@ export interface Order {
   serviceFee: number; // 10% or custom
   total: number;
   paymentMethod?: PaymentMethod;
+  payments?: PaymentSplit[]; // Detalhamento de pagamentos múltiplos / divididos
+  change?: number; // Troco total se houver pagamento em dinheiro
   isPaid: boolean;
   notes?: string;
 }
@@ -110,6 +121,7 @@ export interface CashShift {
     credito: number;
     debito: number;
     dinheiro: number;
+    multiplo?: number;
   };
   totalSales: number;
   status: 'aberto' | 'fechado';
@@ -311,6 +323,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Record<SystemPermission,
 
 export const PERMISSION_DEFINITIONS: { key: SystemPermission; label: string; category: string; description: string }[] = [
   {
+    key: 'access_marmitaria',
+    label: '🍱 Módulo Marmitaria & Marmitex',
+    category: 'Módulos do Sistema',
+    description: 'Acesso completo ao sistema de montagem de marmitas (P/M/G/Executiva), cardápio do dia e entregas. Se desativado, o botão e opção de marmitaria NÃO aparecem para o usuário.'
+  },
+  {
     key: 'access_caixa',
     label: 'Frente de Caixa (POS)',
     category: 'Vendas & Caixa',
@@ -339,12 +357,6 @@ export const PERMISSION_DEFINITIONS: { key: SystemPermission; label: string; cat
     label: 'KDS Cozinha & Churrasqueira',
     category: 'Produção',
     description: 'Acessar a fila da grelha, alterar status de preparo e chamar garçom.'
-  },
-  {
-    key: 'access_marmitaria',
-    label: 'Módulo Marmitaria & Marmitex',
-    category: 'Módulos do Sistema',
-    description: 'Acessar o sistema de montagem de marmitas (P/M/G), cardápio do dia e entregas.'
   },
   {
     key: 'manage_menu',
@@ -387,20 +399,30 @@ export const TABLES = [
 
 /**
  * Checks if a given user has a specific system permission.
- * - Admin always has full access to every module and action.
- * - Explicit user permissions are checked first.
+ * - Explicit user permissions are checked first (with string JSON parsing safety).
+ * - Admin role has full root access by default if not explicitly overridden.
  * - Role defaults from DEFAULT_ROLE_PERMISSIONS are used as baseline.
  */
 export function hasPermission(user: AppUser | null | undefined, permission: SystemPermission): boolean {
   if (!user) return false;
   
-  // 1. Admin always has full root access to all system features
-  if (user.role === 'admin') return true;
-  
-  // 2. Explicit permission overrides set directly on user object
-  if (user.permissions && typeof user.permissions[permission] === 'boolean') {
-    return user.permissions[permission];
+  // 1. Explicit permission overrides set directly on user object take precedence
+  if (user.permissions) {
+    let perms: any = user.permissions;
+    if (typeof perms === 'string') {
+      try {
+        perms = JSON.parse(perms);
+      } catch {
+        perms = null;
+      }
+    }
+    if (perms && typeof perms === 'object' && typeof perms[permission] === 'boolean') {
+      return perms[permission];
+    }
   }
+  
+  // 2. Admin role has full access by default
+  if (user.role === 'admin') return true;
   
   // 3. Default permissions for user's role
   const defaultPerms = DEFAULT_ROLE_PERMISSIONS[user.role];
@@ -408,6 +430,13 @@ export function hasPermission(user: AppUser | null | undefined, permission: Syst
     return defaultPerms[permission];
   }
   return false;
+}
+
+/**
+ * Helper to check if a user is permitted to see and enter the Marmitaria system.
+ */
+export function canUserAccessMarmitaria(user: AppUser | null | undefined): boolean {
+  return hasPermission(user, 'access_marmitaria');
 }
 
 /**
@@ -584,10 +613,12 @@ export interface MarmitaOrder {
   discount: number;
   total: number;
   paymentMethod: PaymentMethod;
+  payments?: PaymentSplit[];
   isPaid: boolean;
   changeFor?: number; // Troco para R$
   status: MarmitaOrderStatus;
   notes?: string;
+  generalNotes?: string;
   createdAt: string; // ISO
   updatedAt: string;
 }
@@ -601,6 +632,7 @@ export interface MarmitaSettings {
   pixKey: string;
   pixKeyType: 'cnpj' | 'celular' | 'email' | 'aleatoria';
   autoPrintOnCreate: boolean;
+  footerMessage?: string;
 }
 
 

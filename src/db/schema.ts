@@ -28,6 +28,8 @@ export const orders = pgTable('orders', {
   serviceFee: real('service_fee').notNull().default(0),
   total: real('total').notNull().default(0),
   paymentMethod: text('payment_method'),
+  payments: jsonb('payments'),
+  change: real('change'),
   isPaid: boolean('is_paid').notNull().default(false),
   notes: text('notes'),
 });

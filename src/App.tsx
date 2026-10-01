@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  TabType, Product, StockItem, Order, CashShift, OrderStatus, MeatPoint, PaymentMethod, OrderItem, AppUser,
+  TabType, Product, StockItem, Order, CashShift, OrderStatus, MeatPoint, PaymentMethod, PaymentSplit, OrderItem, AppUser,
   SystemLog, LogCategory, LogActionType, hasPermission, getTabRequiredPermission, getTabTitle, getDefaultTabForUser,
   SystemModule, MarmitaOrder, MarmitaOrderStatus, MarmitaSizeConfig, MarmitaOption, MarmitaSettings
 } from './types';
@@ -92,19 +92,26 @@ export default function App() {
   // Initial fetch from PostgreSQL backend API
   useEffect(() => {
     fetchProductsFromApi().then((apiProds) => {
-      if (apiProds && apiProds.length > 0) setProducts(apiProds);
+      if (apiProds && Array.isArray(apiProds) && apiProds.length > 0) setProducts(apiProds);
     });
     fetchOrdersFromApi().then((apiOrders) => {
-      if (apiOrders && apiOrders.length > 0) setOrders(apiOrders);
+      if (apiOrders && Array.isArray(apiOrders) && apiOrders.length > 0) {
+        const sanitized = apiOrders.map((o) => ({
+          ...o,
+          items: Array.isArray(o.items) ? o.items : [],
+          payments: Array.isArray(o.payments) ? o.payments : [],
+        }));
+        setOrders(sanitized);
+      }
     });
     fetchStockFromApi().then((apiStock) => {
-      if (apiStock && apiStock.length > 0) setStock(apiStock);
+      if (apiStock && Array.isArray(apiStock) && apiStock.length > 0) setStock(apiStock);
     });
     fetchCashShiftFromApi().then((apiShift) => {
       if (apiShift) setCashShift(apiShift);
     });
     fetchUsersFromApi().then((apiUsers) => {
-      if (apiUsers && apiUsers.length > 0) {
+      if (apiUsers && Array.isArray(apiUsers) && apiUsers.length > 0) {
         setUsers(apiUsers);
         setCurrentUser((current) => {
           const match = apiUsers.find((u) => u.id === current.id);
@@ -113,7 +120,7 @@ export default function App() {
       }
     });
     fetchLogsFromApi().then((apiLogs) => {
-      if (apiLogs && apiLogs.length > 0) setLogs(apiLogs);
+      if (apiLogs && Array.isArray(apiLogs) && apiLogs.length > 0) setLogs(apiLogs);
     });
   }, []);
 
@@ -121,8 +128,13 @@ export default function App() {
   useEffect(() => {
     const pollInterval = setInterval(() => {
       fetchOrdersFromApi().then((apiOrders) => {
-        if (apiOrders && apiOrders.length > 0) {
-          setOrders(apiOrders);
+        if (apiOrders && Array.isArray(apiOrders) && apiOrders.length > 0) {
+          const sanitized = apiOrders.map((o) => ({
+            ...o,
+            items: Array.isArray(o.items) ? o.items : [],
+            payments: Array.isArray(o.payments) ? o.payments : [],
+          }));
+          setOrders(sanitized);
         }
       });
     }, 4000);
@@ -180,6 +192,9 @@ export default function App() {
 
   // Marmitaria Handlers
   const handleSelectModule = (module: SystemModule) => {
+    if (module === 'marmitaria' && !hasPermission(currentUser, 'access_marmitaria')) {
+      return;
+    }
     setActiveModule(module);
     saveActiveModule(module);
     if (module === 'marmitaria') {
@@ -198,6 +213,15 @@ export default function App() {
       { module, operator: currentUser.name }
     );
   };
+
+  // Guard against unauthorized module or tab access if permissions change or reload
+  useEffect(() => {
+    if (activeModule === 'marmitaria' && !hasPermission(currentUser, 'access_marmitaria')) {
+      setActiveModule('espetos');
+      saveActiveModule('espetos');
+      setActiveTab(getDefaultTabForUser(currentUser));
+    }
+  }, [currentUser, activeModule]);
 
   const handleStartupSelectSystem = (module: SystemModule, rememberChoice: boolean) => {
     if (rememberChoice) {
@@ -360,11 +384,17 @@ export default function App() {
     saveCurrentUser(user);
     saveAuthSession({ isAuthenticated: true, userId: user.id, rememberMe });
 
-    // Set starting tab matching user's permissions
-    const defaultTab = getDefaultTabForUser(user);
-    const currentTabReq = getTabRequiredPermission(activeTab);
-    if (currentTabReq && !hasPermission(user, currentTabReq)) {
-      setActiveTab(defaultTab);
+    // Set starting tab & module matching user's permissions
+    if (activeModule === 'marmitaria' && !hasPermission(user, 'access_marmitaria')) {
+      setActiveModule('espetos');
+      saveActiveModule('espetos');
+      setActiveTab(getDefaultTabForUser(user));
+    } else {
+      const defaultTab = getDefaultTabForUser(user);
+      const currentTabReq = getTabRequiredPermission(activeTab);
+      if (currentTabReq && !hasPermission(user, currentTabReq)) {
+        setActiveTab(defaultTab);
+      }
     }
 
     const nowFormatted = `Hoje, às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -416,10 +446,16 @@ export default function App() {
     saveCurrentUser(freshUser);
     saveAuthSession({ isAuthenticated: true, userId: freshUser.id, rememberMe: true });
     
-    // Check if new user has access to currently selected tab, else route to their default
-    const reqPerm = getTabRequiredPermission(activeTab);
-    if (reqPerm && !hasPermission(freshUser, reqPerm)) {
+    // Check if new user has access to currently selected tab and module
+    if (activeModule === 'marmitaria' && !hasPermission(freshUser, 'access_marmitaria')) {
+      setActiveModule('espetos');
+      saveActiveModule('espetos');
       setActiveTab(getDefaultTabForUser(freshUser));
+    } else {
+      const reqPerm = getTabRequiredPermission(activeTab);
+      if (reqPerm && !hasPermission(freshUser, reqPerm)) {
+        setActiveTab(getDefaultTabForUser(freshUser));
+      }
     }
 
     // Optionally update the cash shift operator name if it is open
@@ -805,18 +841,22 @@ export default function App() {
     syncOrderToApi(newOrder);
 
     // Update Cash shift totals (only if order is paid)
-    if (orderData.paymentMethod && orderData.isPaid) {
+    if (orderData.isPaid && (orderData.paymentMethod || (orderData.payments && orderData.payments.length > 0))) {
       setCashShift((prevShift) => {
-        const method = orderData.paymentMethod!;
-        const currentByMethod = prevShift.salesByPaymentMethod[method] || 0;
+        const updatedByMethod = { ...prevShift.salesByPaymentMethod };
+        if (orderData.payments && orderData.payments.length > 0) {
+          orderData.payments.forEach((p) => {
+            updatedByMethod[p.method] = (updatedByMethod[p.method] || 0) + p.amount;
+          });
+        } else if (orderData.paymentMethod && orderData.paymentMethod !== 'multiplo') {
+          const method = orderData.paymentMethod;
+          updatedByMethod[method] = (updatedByMethod[method] || 0) + orderData.total;
+        }
 
         const updatedShift = {
           ...prevShift,
           totalSales: prevShift.totalSales + orderData.total,
-          salesByPaymentMethod: {
-            ...prevShift.salesByPaymentMethod,
-            [method]: currentByMethod + orderData.total,
-          },
+          salesByPaymentMethod: updatedByMethod,
         };
         syncCashShiftToApi(updatedShift);
         return updatedShift;
@@ -842,11 +882,15 @@ export default function App() {
       setReceiptOrder(newOrder);
     }
 
+    const payLabel = newOrder.payments && newOrder.payments.length > 1
+      ? `Múltiplas Formas (${newOrder.payments.map((p) => `${p.method.toUpperCase()} R$ ${p.amount.toFixed(2).replace('.', ',')}`).join(' + ')})`
+      : newOrder.paymentMethod?.toUpperCase() || 'Pendente';
+
     addAuditLog(
       'pedidos',
       'pedido_criado',
       `Novo Pedido #${newOrder.orderNumber}`,
-      `Pedido para "${newOrder.tableOrCustomer}" registrado com ${newOrder.items.length} itens (Total: R$ ${newOrder.total.toFixed(2).replace('.', ',')}${newOrder.isPaid ? ` - Pago via ${newOrder.paymentMethod?.toUpperCase()}` : ' - Em Aberto'}).`,
+      `Pedido para "${newOrder.tableOrCustomer}" registrado com ${newOrder.items.length} itens (Total: R$ ${newOrder.total.toFixed(2).replace('.', ',')}${newOrder.isPaid ? ` - Pago via ${payLabel}` : ' - Em Aberto'}).`,
       newOrder.isPaid ? 'success' : 'info',
       {
         orderNumber: newOrder.orderNumber,
@@ -854,7 +898,8 @@ export default function App() {
         total: newOrder.total,
         itemCount: newOrder.items.length,
         isPaid: newOrder.isPaid,
-        paymentMethod: newOrder.paymentMethod
+        paymentMethod: newOrder.paymentMethod,
+        payments: newOrder.payments
       }
     );
   };
@@ -865,11 +910,13 @@ export default function App() {
     paymentMethod: PaymentMethod,
     extraCartItems: OrderItem[] = [],
     discount: number = 0,
-    includeServiceFee: boolean = true
+    includeServiceFee: boolean = true,
+    payments?: PaymentSplit[],
+    totalChange?: number
   ) => {
     // 1. Get all unpaid orders for this table
-    const unpaidTableOrders = orders.filter(
-      (o) => o.tableOrCustomer === tableOrCustomer && !o.isPaid && o.status !== 'cancelado'
+    const unpaidTableOrders = (orders || []).filter(
+      (o) => o && o.tableOrCustomer === tableOrCustomer && !o.isPaid && o.status !== 'cancelado'
     );
 
     let totalCollected = 0;
@@ -878,10 +925,12 @@ export default function App() {
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.tableOrCustomer === tableOrCustomer && !ord.isPaid && ord.status !== 'cancelado') {
-          const updated = {
+          const updated: Order = {
             ...ord,
             isPaid: true,
             paymentMethod,
+            payments: payments && payments.length > 0 ? payments : undefined,
+            change: totalChange,
             status: 'entregue' as const,
             items: ord.items.map((i) => ({ ...i, status: 'entregue' as const })),
             updatedAt: new Date().toISOString(),
@@ -914,6 +963,8 @@ export default function App() {
         serviceFee,
         total,
         paymentMethod,
+        payments: payments && payments.length > 0 ? payments : undefined,
+        change: totalChange,
         isPaid: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -938,16 +989,21 @@ export default function App() {
     }
 
     // 4. Update Cash shift totals with totalCollected
-    if (totalCollected > 0 && paymentMethod) {
+    if (totalCollected > 0) {
       setCashShift((prevShift) => {
-        const currentByMethod = prevShift.salesByPaymentMethod[paymentMethod] || 0;
+        const updatedByMethod = { ...prevShift.salesByPaymentMethod };
+        if (payments && payments.length > 0) {
+          payments.forEach((p) => {
+            updatedByMethod[p.method] = (updatedByMethod[p.method] || 0) + p.amount;
+          });
+        } else if (paymentMethod && paymentMethod !== 'multiplo') {
+          updatedByMethod[paymentMethod] = (updatedByMethod[paymentMethod] || 0) + totalCollected;
+        }
+
         const updatedShift = {
           ...prevShift,
           totalSales: prevShift.totalSales + totalCollected,
-          salesByPaymentMethod: {
-            ...prevShift.salesByPaymentMethod,
-            [paymentMethod]: currentByMethod + totalCollected,
-          },
+          salesByPaymentMethod: updatedByMethod,
         };
         syncCashShiftToApi(updatedShift);
         return updatedShift;
@@ -975,6 +1031,8 @@ export default function App() {
       serviceFee: consolidatedServiceFee,
       total: totalCollected,
       paymentMethod,
+      payments: payments && payments.length > 0 ? payments : undefined,
+      change: totalChange,
       isPaid: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -982,16 +1040,21 @@ export default function App() {
 
     setReceiptOrder(consolidatedOrder);
 
+    const payDesc = payments && payments.length > 1
+      ? `Múltiplas Formas (${payments.map((p) => `${p.method.toUpperCase()}: R$ ${p.amount.toFixed(2).replace('.', ',')}`).join(' + ')})`
+      : paymentMethod.toUpperCase();
+
     addAuditLog(
       'pedidos',
       'pedido_pago',
       `Comanda Paga: ${tableOrCustomer}`,
-      `Pagamento recebido no valor de R$ ${totalCollected.toFixed(2).replace('.', ',')} via ${paymentMethod.toUpperCase()} (${combinedItems.length} itens).`,
+      `Pagamento recebido no valor de R$ ${totalCollected.toFixed(2).replace('.', ',')} via ${payDesc} (${combinedItems.length} itens).`,
       'success',
       {
         tableOrCustomer,
         total: totalCollected,
         paymentMethod,
+        payments,
         itemCount: combinedItems.length
       }
     );
@@ -1041,14 +1104,15 @@ export default function App() {
   };
 
   // Metric counts for Navbar
-  const activeOrdersCount = orders.filter(
-    (o) => o.status === 'novo' || o.status === 'na_churrasqueira' || o.status === 'pronto'
+  const activeOrdersCount = (orders || []).filter(
+    (o) => o && (o.status === 'novo' || o.status === 'na_churrasqueira' || o.status === 'pronto')
   ).length;
 
   // Helper function to check if item is a drink
   const isDrinkItem = (item: OrderItem) => {
+    if (!item) return false;
     if (item.category === 'bebidas') return true;
-    const product = products.find((p) => p.id === item.productId);
+    const product = (products || []).find((p) => p.id === item.productId);
     if (product && product.category === 'bebidas') return true;
     const nameLower = (item.productName || '').toLowerCase();
     return (
@@ -1085,20 +1149,20 @@ export default function App() {
     );
   };
 
-  const grillItemsCount = orders
-    .filter((o) => o.status !== 'entregue' && o.status !== 'cancelado')
+  const grillItemsCount = (orders || [])
+    .filter((o) => o && o.status !== 'entregue' && o.status !== 'cancelado')
     .reduce((count, ord) => {
-      const grillingItems = ord.items.filter(
-        (i) => (i.status === 'na_grelha' || i.status === 'aguardando') && !isDrinkItem(i)
+      const grillingItems = (ord.items || []).filter(
+        (i) => i && (i.status === 'na_grelha' || i.status === 'aguardando') && !isDrinkItem(i)
       );
-      return count + grillingItems.reduce((s, i) => s + i.quantity, 0);
+      return count + grillingItems.reduce((s, i) => s + (i.quantity || 0), 0);
     }, 0);
 
-  const todaySalesTotal = cashShift.totalSales;
+  const todaySalesTotal = cashShift?.totalSales || 0;
 
   // Active Marmitaria Orders Count
-  const activeMarmitasCount = marmitaOrders.filter(
-    (o) => o.status === 'pendente' || o.status === 'em_montagem' || o.status === 'pronto'
+  const activeMarmitasCount = (marmitaOrders || []).filter(
+    (o) => o && (o.status === 'pendente' || o.status === 'em_montagem' || o.status === 'pronto_embalado' || o.status === 'novo')
   ).length;
 
   // Render Interactive Customer QR Code Menu if in customer view
@@ -1185,7 +1249,18 @@ export default function App() {
                 currentUser={currentUser}
                 requiredPermission={requiredPerm}
                 tabTitle={getTabTitle(activeTab)}
-                onNavigateToDefaultTab={() => setActiveTab(getDefaultTabForUser(currentUser))}
+                onNavigateToDefaultTab={() => {
+                  const defTab = getDefaultTabForUser(currentUser);
+                  if (defTab === 'marmitaria' && hasPermission(currentUser, 'access_marmitaria')) {
+                    setActiveModule('marmitaria');
+                    saveActiveModule('marmitaria');
+                    setActiveTab('marmitaria');
+                  } else {
+                    setActiveModule('espetos');
+                    saveActiveModule('espetos');
+                    setActiveTab(defTab === 'marmitaria' ? 'cardapio' : defTab);
+                  }
+                }}
                 onLogout={handleLogout}
                 users={users}
                 onAuthorizeSupervisor={(supervisor) => handleSwitchCurrentUser(supervisor)}

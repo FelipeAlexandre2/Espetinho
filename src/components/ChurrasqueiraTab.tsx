@@ -112,7 +112,7 @@ export const ChurrasqueiraTab: React.FC<ChurrasqueiraTabProps> = ({
   }, []);
 
   // Filter active non-completed orders
-  const activeOrders = orders.filter((o) => o.status !== 'cancelado');
+  const activeOrders = (orders || []).filter((o) => o && o.status !== 'cancelado');
 
   // Extract items across active orders (excluding drinks)
   const allActiveItems: Array<{
@@ -124,9 +124,9 @@ export const ChurrasqueiraTab: React.FC<ChurrasqueiraTabProps> = ({
   }> = [];
 
   activeOrders.forEach((ord) => {
-    ord.items.forEach((item) => {
+    (ord.items || []).forEach((item) => {
       // ONLY food/meats/accompaniments appear on churrasqueira/cozinha screen
-      if (!isDrinkItem(item)) {
+      if (item && !isDrinkItem(item)) {
         allActiveItems.push({
           orderId: ord.id,
           orderNumber: ord.orderNumber,
@@ -139,10 +139,10 @@ export const ChurrasqueiraTab: React.FC<ChurrasqueiraTabProps> = ({
   });
 
   // Churrasqueira items categories
-  const waitingItems = allActiveItems.filter((i) => i.item.status === 'aguardando');
-  const preparingItems = allActiveItems.filter((i) => i.item.status === 'na_grelha');
-  const readyItems = allActiveItems.filter((i) => i.item.status === 'pronto');
-  const deliveredItems = allActiveItems.filter((i) => i.item.status === 'entregue');
+  const waitingItems = allActiveItems.filter((i) => i.item?.status === 'aguardando');
+  const preparingItems = allActiveItems.filter((i) => i.item?.status === 'na_grelha');
+  const readyItems = allActiveItems.filter((i) => i.item?.status === 'pronto');
+  const deliveredItems = allActiveItems.filter((i) => i.item?.status === 'entregue');
 
   // Group ready items by Order / Table for the Balcão view
   const readyOrdersMap = new Map<string, {
@@ -154,7 +154,7 @@ export const ChurrasqueiraTab: React.FC<ChurrasqueiraTabProps> = ({
   }>();
 
   activeOrders.forEach((ord) => {
-    const readyItemsForOrder = ord.items.filter((i) => i.status === 'pronto' && !isDrinkItem(i));
+    const readyItemsForOrder = (ord.items || []).filter((i) => i && i.status === 'pronto' && !isDrinkItem(i));
     if (readyItemsForOrder.length > 0) {
       readyOrdersMap.set(ord.id, {
         orderId: ord.id,
@@ -178,7 +178,7 @@ export const ChurrasqueiraTab: React.FC<ChurrasqueiraTabProps> = ({
   }>();
 
   activeOrders.forEach((ord) => {
-    const deliveredItemsForOrder = ord.items.filter((i) => i.status === 'entregue' && !isDrinkItem(i));
+    const deliveredItemsForOrder = (ord.items || []).filter((i) => i && i.status === 'entregue' && !isDrinkItem(i));
     if (deliveredItemsForOrder.length > 0) {
       deliveredOrdersMap.set(ord.id, {
         orderId: ord.id,

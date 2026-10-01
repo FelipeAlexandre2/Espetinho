@@ -8,7 +8,7 @@ import {
   Search, Filter, Edit3, Trash2, Check, X, Eye, EyeOff, 
   Sparkles, CheckCircle2, XCircle, RefreshCw, UserCheck, 
   Lock, Unlock, Phone, Mail, Clock, HelpCircle, AlertTriangle,
-  Flame, DollarSign, Package, BarChart3, UtensilsCrossed,
+  Flame, DollarSign, Package, BarChart3, UtensilsCrossed, ChefHat,
   ToggleLeft, ToggleRight, CheckSquare, Square, ChevronRight, Zap,
   FileText, Info, Award
 } from 'lucide-react';
@@ -242,11 +242,6 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
       ...(DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.garcom),
       ...(user.permissions || {}),
     };
-    if (user.role === 'admin') {
-      (Object.keys(DEFAULT_ROLE_PERMISSIONS.admin) as SystemPermission[]).forEach((k) => {
-        basePerms[k] = true;
-      });
-    }
 
     setEditingUser(user);
     setFormData({
@@ -413,7 +408,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
       alert('Você não pode excluir o usuário que está conectado no momento.');
       return;
     }
-    const adminCount = users.filter((u) => u.role === 'admin' && u.status === 'ativo').length;
+    const adminCount = (users || []).filter((u) => u && u.role === 'admin' && u.status === 'ativo').length;
     if (user.role === 'admin' && adminCount <= 1) {
       alert('O sistema precisa ter pelo menos 1 Administrador ativo.');
       return;
@@ -444,12 +439,13 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
 
   // Filtered users list
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
+    return (users || []).filter((user) => {
+      if (!user) return false;
       const matchSearch =
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (user.name && user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (user.phone && user.phone.includes(searchQuery)) ||
-        ROLE_CONFIG[user.role].label.toLowerCase().includes(searchQuery.toLowerCase());
+        (user.role && ROLE_CONFIG[user.role]?.label.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchRole =
         selectedRoleFilter === 'todos' || user.role === selectedRoleFilter;
@@ -462,10 +458,11 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
   }, [users, searchQuery, selectedRoleFilter, selectedStatusFilter]);
 
   // Metric counts
-  const totalUsers = users.length;
-  const activeUsersCount = users.filter((u) => u.status === 'ativo').length;
-  const adminManagersCount = users.filter((u) => u.role === 'admin' || u.role === 'gerente').length;
-  const posOperatorsCount = users.filter((u) => u.permissions.access_caixa && u.status === 'ativo').length;
+  const totalUsers = (users || []).length;
+  const activeUsersCount = (users || []).filter((u) => u && u.status === 'ativo').length;
+  const adminManagersCount = (users || []).filter((u) => u && (u.role === 'admin' || u.role === 'gerente')).length;
+  const posOperatorsCount = (users || []).filter((u) => u && hasPermission(u, 'access_caixa') && u.status === 'ativo').length;
+  const marmitariaOperatorsCount = (users || []).filter((u) => u && hasPermission(u, 'access_marmitaria') && u.status === 'ativo').length;
 
   return (
     <div className="space-y-6 pb-16 relative">
@@ -590,14 +587,14 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
           <div className="bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-700 text-xs">
             <span className="text-slate-400 block text-[10px] uppercase font-bold">Permissões Habilitadas</span>
             <span className="font-extrabold text-emerald-400 text-sm">
-              {Object.values(currentUser.permissions).filter(Boolean).length} de {PERMISSION_DEFINITIONS.length} Funções
+              {Object.values(currentUser?.permissions || {}).filter(Boolean).length} de {PERMISSION_DEFINITIONS.length} Funções
             </span>
           </div>
         </div>
       </div>
 
       {/* Metrics Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Total */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
           <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
@@ -639,6 +636,17 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
           <div>
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Acesso ao Caixa POS</span>
             <span className="text-xl sm:text-2xl font-black text-slate-900">{posOperatorsCount}</span>
+          </div>
+        </div>
+
+        {/* Card 5: Operadores de Marmitaria */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5 col-span-2 md:col-span-1">
+          <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
+            <ChefHat className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Acesso Marmitaria</span>
+            <span className="text-xl sm:text-2xl font-black text-orange-600">{marmitariaOperatorsCount}</span>
           </div>
         </div>
       </div>
@@ -737,6 +745,84 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                   <option value="inativo">Inativos</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Quick Access Control Banner for Marmitaria */}
+          <div className="bg-gradient-to-r from-orange-950 via-slate-900 to-amber-950 rounded-2xl p-4 sm:p-5 text-white border-2 border-orange-500/40 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-orange-500/20">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center shrink-0">
+                  <ChefHat className="w-5 h-5 text-orange-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm sm:text-base font-black text-white">
+                      🍱 Quem pode acessar a Marmitaria?
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                      {marmitariaOperatorsCount} de {activeUsersCount} Liberados
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Defina quem tem permissão para acessar o sistema de marmitex. A opção só aparecerá para os colaboradores com acesso permitido.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Operator Quick Marmitaria Switchers */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5 pt-3.5">
+              {users.filter(u => u.status === 'ativo').map((u) => {
+                const canAccess = hasPermission(u, 'access_marmitaria');
+                return (
+                  <div
+                    key={`marmita-access-${u.id}`}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      canAccess
+                        ? 'bg-orange-900/40 border-orange-500/60 shadow-xs'
+                        : 'bg-slate-900/60 border-slate-800 opacity-70'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2 min-w-0 pr-1">
+                      <img
+                        src={u.avatar || AVATAR_SUGGESTIONS[0]}
+                        alt={u.name}
+                        className="w-7 h-7 rounded-lg object-cover shrink-0 border border-slate-700"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white truncate leading-tight">
+                          {u.name.split(' ')[0]}
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate capitalize">
+                          {ROLE_CONFIG[u.role].label.split('/')[0]}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDirectTogglePermission(u, 'access_marmitaria')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 active:scale-95 ${
+                          canAccess
+                            ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-xs'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                        }`}
+                        title={canAccess ? `Clique para bloquear Marmitaria para ${u.name}` : `Clique para liberar Marmitaria para ${u.name}`}
+                      >
+                        {canAccess ? 'Liberado' : 'Bloqueado'}
+                      </button>
+                    ) : (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        canAccess ? 'bg-orange-500/20 text-orange-300' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {canAccess ? 'Liberado' : 'Bloqueado'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -911,6 +997,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                         <div className="flex flex-wrap gap-1.5">
                           {PERMISSION_DEFINITIONS.map((perm) => {
                             const isGranted = hasPermission(user, perm.key);
+                            const isMarmita = perm.key === 'access_marmitaria';
                             
                             if (isAdmin) {
                               return (
@@ -920,12 +1007,14 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                                   title={`${isGranted ? '✅ ATIVADA - Clique para desativar' : '⭕ DESATIVADA - Clique para ATIVAR'} a permissão "${perm.label}"`}
                                   className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border transition-all flex items-center space-x-1 cursor-pointer active:scale-95 ${
                                     isGranted
-                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs hover:bg-emerald-100 hover:border-emerald-400'
+                                      ? isMarmita
+                                        ? 'bg-orange-100 text-orange-950 border-orange-400 shadow-2xs hover:bg-orange-200 ring-1 ring-orange-500/30'
+                                        : 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs hover:bg-emerald-100 hover:border-emerald-400'
                                       : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-300'
                                   }`}
                                 >
                                   {isGranted ? (
-                                    <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[3]" />
+                                    <Check className={`w-3 h-3 ${isMarmita ? 'text-orange-700' : 'text-emerald-600'} shrink-0 stroke-[3]`} />
                                   ) : (
                                     <X className="w-3 h-3 text-slate-400 shrink-0" />
                                   )}
@@ -942,12 +1031,14 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                                 title={`Permissão: "${perm.label}" - ${isGranted ? 'Concedida' : 'Bloqueada'} (Somente Administrador pode alterar)`}
                                 className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center space-x-1 cursor-pointer ${
                                   isGranted
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    ? isMarmita
+                                      ? 'bg-orange-100 text-orange-950 border-orange-300'
+                                      : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                     : 'bg-slate-50 text-slate-400 border-slate-200 opacity-60'
                                 }`}
                               >
                                 {isGranted ? (
-                                  <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[3]" />
+                                  <Check className={`w-3 h-3 ${isMarmita ? 'text-orange-700' : 'text-emerald-600'} shrink-0 stroke-[3]`} />
                                 ) : (
                                   <X className="w-3 h-3 text-slate-400 shrink-0" />
                                 )}
@@ -1187,6 +1278,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                       {/* Interactive Cells for Admin, Read-only badges for Non-Admin */}
                       {users.map((u) => {
                         const isGranted = hasPermission(u, perm.key);
+                        const isMarmita = perm.key === 'access_marmitaria';
                         return (
                           <td key={u.id} className="py-3 px-3 text-center">
                             {isAdmin ? (
@@ -1195,7 +1287,9 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                                 title={`Clique para ${isGranted ? 'DESATIVAR' : 'ATIVAR'} "${perm.label}" para ${u.name}`}
                                 className={`w-full py-1.5 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95 ${
                                   isGranted
-                                    ? 'bg-emerald-500 text-white shadow-xs hover:bg-emerald-600'
+                                    ? isMarmita
+                                      ? 'bg-orange-500 text-white shadow-xs hover:bg-orange-600 ring-1 ring-orange-400'
+                                      : 'bg-emerald-500 text-white shadow-xs hover:bg-emerald-600'
                                     : 'bg-slate-100 text-slate-400 hover:bg-purple-100 hover:text-purple-700 border border-slate-200'
                                 }`}
                               >
@@ -1217,13 +1311,15 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                                 title={`Permissão ${isGranted ? 'Ativa' : 'Inativa'} (Somente Administrador pode alterar)`}
                                 className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 cursor-pointer ${
                                   isGranted
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    ? isMarmita
+                                      ? 'bg-orange-100 text-orange-900 border border-orange-300'
+                                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : 'bg-slate-50 text-slate-400 border border-slate-200 opacity-60'
                                 }`}
                               >
                                 {isGranted ? (
                                   <>
-                                    <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                                    <Check className={`w-3 h-3 ${isMarmita ? 'text-orange-700' : 'text-emerald-600'} stroke-[3]`} />
                                     <span className="text-[10px] uppercase tracking-wider">Ativo</span>
                                   </>
                                 ) : (
@@ -1669,6 +1765,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                 // Find latest state of quickPermUser from users array
                 const latestUser = users.find((u) => u.id === quickPermUser.id) || quickPermUser;
                 const isGranted = hasPermission(latestUser, perm.key);
+                const isMarmita = perm.key === 'access_marmitaria';
 
                 return (
                   <div
@@ -1676,7 +1773,9 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                     onClick={() => handleDirectTogglePermission(latestUser, perm.key)}
                     className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer select-none active:scale-[0.99] ${
                       isGranted
-                        ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-500/20 shadow-2xs'
+                        ? isMarmita
+                          ? 'bg-orange-50 border-orange-400 ring-1 ring-orange-500/30 shadow-2xs'
+                          : 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-500/20 shadow-2xs'
                         : 'bg-slate-50 border-slate-200 opacity-75 hover:opacity-100'
                     }`}
                   >
@@ -1686,7 +1785,11 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                           {perm.label}
                         </span>
                         <span className={`px-2 py-0.2 rounded text-[9px] font-black uppercase ${
-                          isGranted ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-200 text-slate-600'
+                          isGranted
+                            ? isMarmita
+                              ? 'bg-orange-200 text-orange-950 font-black'
+                              : 'bg-emerald-200 text-emerald-900'
+                            : 'bg-slate-200 text-slate-600'
                         }`}>
                           {isGranted ? 'Ativado' : 'Desativado'}
                         </span>
@@ -1698,7 +1801,9 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
 
                     {/* Toggle Switch */}
                     <div className={`w-12 h-6 rounded-full transition-colors flex items-center p-1 shrink-0 ${
-                      isGranted ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                      isGranted
+                        ? isMarmita ? 'bg-orange-600 justify-end' : 'bg-emerald-600 justify-end'
+                        : 'bg-slate-300 justify-start'
                     }`}>
                       <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
                     </div>
@@ -1938,13 +2043,16 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                   {PERMISSION_DEFINITIONS.map((perm) => {
                     const isChecked = !!formData.permissions[perm.key];
+                    const isMarmita = perm.key === 'access_marmitaria';
                     return (
                       <div
                         key={perm.key}
                         onClick={() => handleFormPermissionToggle(perm.key)}
                         className={`flex items-start justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
                           isChecked 
-                            ? 'bg-white border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs' 
+                            ? isMarmita
+                              ? 'bg-orange-50/80 border-orange-400 ring-2 ring-orange-500/20 shadow-2xs'
+                              : 'bg-white border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs' 
                             : 'bg-slate-100/60 border-slate-200/80 opacity-70 hover:opacity-100'
                         }`}
                       >
@@ -1954,7 +2062,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                             checked={isChecked}
                             onChange={() => handleFormPermissionToggle(perm.key)}
                             onClick={(e) => e.stopPropagation()}
-                            className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                            className={`mt-0.5 rounded border-slate-300 ${isMarmita ? 'text-orange-600 focus:ring-orange-500' : 'text-emerald-600 focus:ring-emerald-500'} w-4 h-4 cursor-pointer`}
                           />
                           <div>
                             <span className="text-xs font-extrabold text-slate-900 block leading-tight">
@@ -1967,7 +2075,11 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                         </div>
 
                         <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase shrink-0 ${
-                          isChecked ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                          isChecked
+                            ? isMarmita
+                              ? 'bg-orange-200 text-orange-950 font-black'
+                              : 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-200 text-slate-600'
                         }`}>
                           {isChecked ? 'Ativo' : 'Desativado'}
                         </span>
@@ -2036,9 +2148,9 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                   required
                 >
                   <option value="">Selecione quem está operando...</option>
-                  {users.filter((u) => u.status === 'ativo').map((u) => (
+                  {(users || []).filter((u) => u && u.status === 'ativo').map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name} ({ROLE_CONFIG[u.role].label})
+                      {u.name} ({ROLE_CONFIG[u.role]?.label || u.role})
                     </option>
                   ))}
                 </select>

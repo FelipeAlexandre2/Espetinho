@@ -11,7 +11,8 @@ import {
 } from '../utils/printReceipt';
 import { 
   Printer, X, Check, Share2, Copy, ExternalLink, Settings, 
-  Smartphone, Monitor, Flame, Utensils, FileText, CheckCircle2, ChevronRight
+  Smartphone, Monitor, Flame, Utensils, FileText, CheckCircle2, ChevronRight,
+  ZoomIn
 } from 'lucide-react';
 
 interface ReceiptModalProps {
@@ -25,6 +26,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
   // Print format & profile states
   const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>('80mm');
   const [receiptType, setReceiptType] = useState<ReceiptType>('cliente');
+  const [fontSize, setFontSize] = useState<'normal' | 'grande'>('grande');
   const [settings, setSettings] = useState<ReceiptSettings>(getReceiptSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
@@ -206,6 +208,35 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
               </button>
             </div>
 
+            {/* Font Size Selector (High Legibility) */}
+            <div className="flex items-center gap-1 bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setFontSize('normal')}
+                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer ${
+                  fontSize === 'normal'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Tamanho padrão de letra"
+              >
+                Normal
+              </button>
+              <button
+                type="button"
+                onClick={() => setFontSize('grande')}
+                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  fontSize === 'grande'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Tamanho extra grande para leitura facilitada"
+              >
+                <ZoomIn className="w-3 h-3" />
+                <span>Extra Grande</span>
+              </button>
+            </div>
+
           </div>
 
           {/* Settings Drawer (if open) */}
@@ -282,25 +313,25 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/60 flex items-center justify-center min-h-[300px]">
           
           <div 
-            className={`printable-receipt bg-white shadow-lg border border-slate-300 font-mono text-slate-900 space-y-3 transition-all duration-200 rounded-xs ${
+            className={`printable-receipt bg-white text-black shadow-xl border-2 border-black font-sans space-y-3 transition-all duration-200 rounded-xs ${
               paperWidth === '58mm'
-                ? 'w-[280px] p-4 text-[11px]'
+                ? 'w-[290px] p-4 text-xs'
                 : paperWidth === '80mm'
-                ? 'w-[340px] p-5 text-[12px]'
-                : 'w-full max-w-[420px] p-6 text-[13px]'
-            }`}
+                ? 'w-[360px] p-5 text-sm'
+                : 'w-full max-w-[440px] p-6 text-sm'
+            } ${fontSize === 'grande' ? 'text-sm sm:text-base' : ''}`}
           >
             {/* Header */}
-            <div className="text-center space-y-0.5 border-b border-dashed border-slate-400 pb-3">
-              <h2 className="font-black text-slate-900 text-base uppercase tracking-wider">
+            <div className="text-center space-y-0.5 border-b-2 border-black pb-3">
+              <h2 className="font-black text-black text-lg uppercase tracking-wider">
                 {settings.restaurantName || 'ESPETINHO DO CHEFE'}
               </h2>
-              {settings.subtitle && <p className="text-[10px] text-slate-600">{settings.subtitle}</p>}
-              {settings.address && <p className="text-[10px] text-slate-600">{settings.address}</p>}
-              {settings.phone && <p className="text-[10px] text-slate-600">WhatsApp/Tel: {settings.phone}</p>}
-              {settings.cnpj && <p className="text-[10px] text-slate-600">CNPJ: {settings.cnpj}</p>}
+              {settings.subtitle && <p className="text-xs font-bold text-black">{settings.subtitle}</p>}
+              {settings.address && <p className="text-xs font-bold text-black">{settings.address}</p>}
+              {settings.phone && <p className="text-xs font-black text-black">WhatsApp/Tel: {settings.phone}</p>}
+              {settings.cnpj && <p className="text-xs font-bold text-black">CNPJ: {settings.cnpj}</p>}
               
-              <div className="mt-1 pt-1 inline-block border border-dashed border-slate-400 px-2 py-0.5 rounded text-[9px] font-extrabold text-slate-700 uppercase">
+              <div className="mt-1 pt-1 inline-block border-2 border-black px-2.5 py-0.5 rounded text-[11px] font-black text-black uppercase bg-slate-50">
                 {isKitchen
                   ? '🔥 COMANDA DE COZINHA / GRELHA 🔥'
                   : receiptType === 'pre_conta'
@@ -310,47 +341,47 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
             </div>
 
             {/* Order & Table info */}
-            <div className="flex justify-between font-black text-slate-900 border-b border-dashed border-slate-400 pb-2">
-              <span className="text-sm">PEDIDO #{order.orderNumber}</span>
-              <span className="uppercase text-sm">{order.tableOrCustomer}</span>
+            <div className="flex justify-between font-black text-black border-b-2 border-black pb-2 text-base">
+              <span>PEDIDO #{order.orderNumber}</span>
+              <span className="uppercase">{order.tableOrCustomer}</span>
             </div>
 
-            <div className="text-[10px] text-slate-600 flex justify-between">
+            <div className="text-xs text-black font-bold flex justify-between">
               <span>Data: {formattedDate}</span>
               <span>Hora: {formattedTime}</span>
             </div>
 
             {order.notes && (
-              <div className="text-[11px] bg-amber-50 p-1.5 rounded border border-amber-200 text-amber-900 font-medium">
-                <strong>Obs:</strong> {order.notes}
+              <div className="text-xs bg-amber-100 p-2 rounded border-2 border-dashed border-black text-black font-black">
+                ⚠️ OBS GERAL: {order.notes.toUpperCase()}
               </div>
             )}
 
             {/* Items list */}
-            <div className="space-y-2 py-2 border-y border-dashed border-slate-400">
-              <div className="flex justify-between font-extrabold text-slate-800 text-[10px] uppercase">
+            <div className="space-y-2 py-2.5 border-y-2 border-black">
+              <div className="flex justify-between font-black text-black text-xs uppercase border-b border-black pb-1">
                 <span>Qtd Descrição</span>
                 {!isKitchen && <span>Total</span>}
               </div>
 
               {order.items.map((item) => (
-                <div key={item.id} className="receipt-item space-y-0.5">
-                  <div className="flex justify-between font-bold text-slate-900">
-                    <span className={isKitchen ? 'text-xs font-black' : ''}>
-                      {item.quantity}x {item.productName}
+                <div key={item.id} className="receipt-item space-y-1">
+                  <div className="flex justify-between font-black text-black">
+                    <span className={isKitchen ? 'text-base font-black' : 'text-sm font-black'}>
+                      {item.quantity}x {item.productName.toUpperCase()}
                     </span>
                     {!isKitchen && (
-                      <span>R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                      <span className="font-black">R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
                     )}
                   </div>
                   {item.meatPoint && (
-                    <div className="text-[11px] text-amber-900 font-extrabold pl-2">
+                    <div className="text-xs text-black font-black bg-slate-100 p-1 border-l-4 border-black">
                       ▸ Ponto: {item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA'}
                     </div>
                   )}
                   {item.notes && (
-                    <div className="text-[10px] text-slate-600 italic pl-2">
-                      * Obs: {item.notes}
+                    <div className="text-xs text-black font-bold border border-dashed border-black bg-amber-50 p-1">
+                      ⚠️ Obs: {item.notes.toUpperCase()}
                     </div>
                   )}
                 </div>
@@ -384,10 +415,34 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
                   <span>R$ {order.total.toFixed(2).replace('.', ',')}</span>
                 </div>
 
-                <div className="flex justify-between text-[10px] text-slate-700 pt-1 border-t border-dotted border-slate-300">
-                  <span>Forma de Pagamento:</span>
-                  <span className="font-extrabold uppercase">{order.paymentMethod || 'Não Definido'}</span>
-                </div>
+                {order.payments && order.payments.length > 1 ? (
+                  <div className="pt-1.5 border-t border-dotted border-slate-300 space-y-1">
+                    <div className="flex justify-between text-[10px] text-slate-800 font-extrabold">
+                      <span>FORMAS DE PAGAMENTO:</span>
+                      <span className="text-emerald-800">MÚLTIPLAS ({order.payments.length})</span>
+                    </div>
+                    {order.payments.map((p, pIdx) => (
+                      <div key={pIdx} className="flex justify-between text-[10px] text-slate-600 pl-2">
+                        <span>• {p.method === 'dinheiro' ? 'Dinheiro' : p.method === 'pix' ? 'Pix' : p.method === 'credito' ? 'Cartão Crédito' : 'Cartão Débito'}:</span>
+                        <span className="font-mono font-bold">
+                          R$ {p.amount.toFixed(2).replace('.', ',')}
+                          {p.method === 'dinheiro' && p.change && p.change > 0 ? ` (Troco: R$ ${p.change.toFixed(2).replace('.', ',')})` : ''}
+                        </span>
+                      </div>
+                    ))}
+                    {order.change && order.change > 0 && (
+                      <div className="flex justify-between text-[10px] font-bold text-rose-700 pl-2 pt-0.5">
+                        <span>Troco Devolvido:</span>
+                        <span>R$ {order.change.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-[10px] text-slate-700 pt-1 border-t border-dotted border-slate-300">
+                    <span>Forma de Pagamento:</span>
+                    <span className="font-extrabold uppercase">{order.paymentMethod || 'Não Definido'}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between text-[10px] text-slate-700">
                   <span>Status do Pagamento:</span>

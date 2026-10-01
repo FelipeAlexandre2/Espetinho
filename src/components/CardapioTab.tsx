@@ -66,10 +66,11 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
     unit: 'unid',
   });
 
-  const filteredProducts = products.filter((product) => {
+  const filteredProducts = (products || []).filter((product) => {
+    if (!product) return false;
     const matchesCategory = selectedCategory === 'todos' || product.category === selectedCategory;
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          product.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (product.name && product.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 

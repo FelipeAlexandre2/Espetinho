@@ -5,11 +5,16 @@ import {
   PaymentMethod, AppUser, hasPermission
 } from '../types';
 import { 
+  generateMarmitaLabelHtml, printMarmitaThermalDirect, formatMarmitaWhatsAppText,
+  MarmitaLabelMode, MarmitaPaperWidth, MarmitaFontSize
+} from '../utils/printMarmita';
+import { 
   Utensils, Plus, Minus, Trash2, CheckCircle2, Clock, 
   Motorbike, ShoppingBag, MapPin, Phone, MessageSquare, 
   Printer, Search, Filter, Sparkles, AlertCircle, DollarSign, 
   Calendar, Layers, Check, Edit2, Copy, ArrowRight,
-  ChevronRight, RefreshCw, ChefHat, Tag, PackageCheck, Send
+  ChevronRight, RefreshCw, ChefHat, Tag, PackageCheck, Send,
+  Smartphone, ZoomIn
 } from 'lucide-react';
 
 interface MarmitariaTabProps {
@@ -85,6 +90,36 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
 
   // Selected Order for Label Thermal Print Modal
   const [printOrderModal, setPrintOrderModal] = useState<MarmitaOrder | null>(null);
+  const [labelMode, setLabelMode] = useState<MarmitaLabelMode>('tampa');
+  const [labelPaperWidth, setLabelPaperWidth] = useState<MarmitaPaperWidth>('80mm');
+  const [labelFontSize, setLabelFontSize] = useState<MarmitaFontSize>('grande');
+  const [labelSelectedItemIndex, setLabelSelectedItemIndex] = useState<number | 'all'>('all');
+  const [isPrintingLabel, setIsPrintingLabel] = useState(false);
+
+  const handlePrintMarmitaLabel = async () => {
+    if (!printOrderModal) return;
+    setIsPrintingLabel(true);
+    try {
+      await printMarmitaThermalDirect(printOrderModal, settings, {
+        mode: labelMode,
+        paperWidth: labelPaperWidth,
+        fontSize: labelFontSize,
+        singleItemIndex: labelSelectedItemIndex,
+      });
+    } finally {
+      setIsPrintingLabel(false);
+    }
+  };
+
+  const handleShareMarmitaWhatsApp = () => {
+    if (!printOrderModal) return;
+    const text = formatMarmitaWhatsAppText(printOrderModal, settings);
+    const phone = printOrderModal.customerPhone?.replace(/\D/g, '') || '';
+    const url = phone
+      ? `https://api.whatsapp.com/send?phone=55${phone}&text=${encodeURIComponent(text)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
 
   // Filter & Search in Pedidos tab
   const [orderSearch, setOrderSearch] = useState('');
@@ -412,10 +447,11 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
 
   // Filtered Orders
   const filteredOrders = useMemo(() => {
-    return orders.filter((ord) => {
+    return (orders || []).filter((ord) => {
+      if (!ord) return false;
       // Search
       const searchMatch = !orderSearch.trim() || 
-        ord.customerName.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (ord.customerName && ord.customerName.toLowerCase().includes(orderSearch.toLowerCase())) ||
         String(ord.orderNumber).includes(orderSearch) ||
         (ord.customerPhone && ord.customerPhone.includes(orderSearch)) ||
         (ord.tableOrAddress && ord.tableOrAddress.toLowerCase().includes(orderSearch.toLowerCase()));
@@ -432,22 +468,22 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
 
   // Financial metrics for marmitaria
   const metrics = useMemo(() => {
-    const todayOrders = orders.filter((o) => o.status !== 'cancelado');
-    const totalRevenue = todayOrders.reduce((sum, o) => sum + o.total, 0);
+    const todayOrders = (orders || []).filter((o) => o && o.status !== 'cancelado');
+    const totalRevenue = todayOrders.reduce((sum, o) => sum + (o?.total || 0), 0);
     const totalBoxesSold = todayOrders.reduce((sum, o) => {
-      return sum + o.items.reduce((s, i) => s + i.quantity, 0);
+      return sum + (o?.items || []).reduce((s, i) => s + (i?.quantity || 0), 0);
     }, 0);
 
     const countBySize: Record<MarmitaSize, number> = { P: 0, M: 0, G: 0, executiva: 0 };
     todayOrders.forEach((o) => {
-      o.items.forEach((i) => {
-        if (countBySize[i.size] !== undefined) {
-          countBySize[i.size] += i.quantity;
+      (o?.items || []).forEach((i) => {
+        if (i && countBySize[i.size] !== undefined) {
+          countBySize[i.size] += i.quantity || 0;
         }
       });
     });
 
-    const activeCount = orders.filter((o) => o.status !== 'entregue' && o.status !== 'cancelado').length;
+    const activeCount = (orders || []).filter((o) => o && o.status !== 'entregue' && o.status !== 'cancelado').length;
 
     return {
       totalRevenue,
@@ -1386,7 +1422,7 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {(['proteina', 'guarnicao', 'base', 'feijao', 'salada', 'adicional'] as MarmitaOptionCategory[]).map((cat) => {
-              const categoryOptions = options.filter((o) => o.category === cat);
+              const categoryOptions = (options || []).filter((o) => o && o.category === cat);
               const catTitle = 
                 cat === 'proteina' ? '🥩 Carnes & Proteínas do Dia' :
                 cat === 'guarnicao' ? '🥔 Guarnições & Acompanhamentos' :
@@ -1549,92 +1585,354 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
        * MODAL: ETIQUETA TÉRMICA DA MARMITA (PARA TAMPA OU MOTOBOY)
        * ===================================================================== */}
       {printOrderModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-5 border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-4 sm:p-6 border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="font-black text-sm text-slate-900">Etiqueta de Marmita</span>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg">Etiqueta & Comanda de Marmita</h3>
+                  <p className="text-xs font-bold text-slate-500">
+                    Pedido #{printOrderModal.orderNumber} • {printOrderModal.customerName}
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setPrintOrderModal(null)}
-                className="text-slate-400 hover:text-slate-700 font-black text-sm p-1"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            {/* Printable thermal receipt view */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-300 font-mono text-xs space-y-2 text-black">
-              <div className="text-center border-b border-dashed border-slate-400 pb-2">
-                <h4 className="font-black text-sm tracking-wider uppercase">{settings.restaurantName}</h4>
-                <p className="text-[10px]">{settings.subtitle}</p>
-                <p className="text-[10px] font-bold">Tel/WhatsApp: {settings.phoneWhatsapp}</p>
+            {/* Quick Controls: Format, Paper & Font Size */}
+            <div className="bg-slate-100 p-3 rounded-2xl space-y-2.5 text-xs">
+              {/* Mode Selector */}
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-extrabold text-slate-700 text-[11px] uppercase tracking-wider">Modelo:</span>
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-white rounded-xl border border-slate-200 shadow-2xs w-full max-w-xs">
+                  <button
+                    type="button"
+                    onClick={() => setLabelMode('tampa')}
+                    className={`py-1.5 px-2 rounded-lg font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      labelMode === 'tampa'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>Etiqueta de Tampa</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLabelMode('comanda')}
+                    className={`py-1.5 px-2 rounded-lg font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      labelMode === 'comanda'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Motorbike className="w-3.5 h-3.5" />
+                    <span>Comanda Entrega</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="border-b border-dashed border-slate-400 pb-1.5 text-[11px]">
-                <p><strong>PEDIDO #{printOrderModal.orderNumber}</strong></p>
-                <p>Cliente: {printOrderModal.customerName}</p>
-                {printOrderModal.tableOrAddress && <p>Endereço: {printOrderModal.tableOrAddress}</p>}
-                <p>Tipo: {printOrderModal.deliveryType.toUpperCase()}</p>
-              </div>
-
-              <div className="space-y-1.5 border-b border-dashed border-slate-400 pb-2">
-                {printOrderModal.items.map((i) => (
-                  <div key={i.id} className="text-[11px] leading-tight">
-                    <p className="font-black text-black">
-                      {i.quantity}x {i.sizeName.toUpperCase()}
-                    </p>
-                    <p>• CARNES: {i.proteinas.join(' + ')}</p>
-                    <p>• BASE: {i.bases.join(', ')} / {i.feijoes.join(', ')}</p>
-                    {i.guarnicoes.length > 0 && <p>• GUARN: {i.guarnicoes.join(', ')}</p>}
-                    {i.saladas.length > 0 && <p>• SALADA: {i.saladas.join(', ')}</p>}
-                    {i.adicionais.length > 0 && <p>• EXTRAS: {i.adicionais.map((a) => a.name).join(', ')}</p>}
-                    {i.notes && <p className="font-black">OBS: {i.notes}</p>}
+              {/* Width & Font Size Selectors */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
+                {/* Paper width */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-slate-600">Papel:</span>
+                  <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setLabelPaperWidth('80mm')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-black cursor-pointer ${
+                        labelPaperWidth === '80mm' ? 'bg-amber-500 text-slate-950' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      80mm (Balcão)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLabelPaperWidth('58mm')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-black cursor-pointer ${
+                        labelPaperWidth === '58mm' ? 'bg-amber-500 text-slate-950' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      58mm (Mini)
+                    </button>
                   </div>
-                ))}
-                {printOrderModal.beverages.length > 0 && (
-                  <div className="text-[11px] pt-1 font-bold">
-                    BEBIDAS: {printOrderModal.beverages.map((b) => `${b.quantity}x ${b.name}`).join(', ')}
+                </div>
+
+                {/* Font Size Selector for High Legibility */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-slate-600">Letra:</span>
+                  <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setLabelFontSize('normal')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-black cursor-pointer ${
+                        labelFontSize === 'normal' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Normal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLabelFontSize('grande')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-black flex items-center gap-1 cursor-pointer ${
+                        labelFontSize === 'grande' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <ZoomIn className="w-3 h-3" />
+                      <span>Extra Grande</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Marmita individual selector (when mode is tampa and multiple boxes exist) */}
+              {labelMode === 'tampa' && printOrderModal.items.length > 1 && (
+                <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200/80 overflow-x-auto pb-1">
+                  <span className="text-[11px] font-bold text-slate-600 shrink-0">Imprimir:</span>
+                  <button
+                    type="button"
+                    onClick={() => setLabelSelectedItemIndex('all')}
+                    className={`px-2 py-1 rounded-lg text-xs font-black cursor-pointer shrink-0 ${
+                      labelSelectedItemIndex === 'all'
+                        ? 'bg-slate-900 text-white shadow-2xs'
+                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    Todas ({printOrderModal.items.length})
+                  </button>
+                  {printOrderModal.items.map((it, idx) => (
+                    <button
+                      key={it.id || idx}
+                      type="button"
+                      onClick={() => setLabelSelectedItemIndex(idx)}
+                      className={`px-2 py-1 rounded-lg text-xs font-black cursor-pointer shrink-0 ${
+                        labelSelectedItemIndex === idx
+                          ? 'bg-slate-900 text-white shadow-2xs'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Marmita {idx + 1} ({it.sizeName.toUpperCase()})
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* LIVE THERMAL PREVIEW (High Contrast, Bold, Crisp Pure Black on White) */}
+            <div className="bg-slate-200/70 p-3 sm:p-5 rounded-2xl flex items-center justify-center overflow-x-auto">
+              <div
+                className={`printable-receipt bg-white text-black border-2 border-black font-sans shadow-lg transition-all rounded-xs p-4 sm:p-5 space-y-3 ${
+                  labelPaperWidth === '58mm' ? 'w-[290px]' : 'w-[370px]'
+                }`}
+              >
+                {/* Header */}
+                <div className="text-center border-b-2 border-black pb-2 space-y-0.5">
+                  <h4 className="font-black text-lg uppercase tracking-wider text-black">
+                    {settings.restaurantName || 'MARESIA MARMITARIA'}
+                  </h4>
+                  {settings.subtitle && <p className="text-xs font-bold text-black">{settings.subtitle}</p>}
+                  <p className="text-xs font-black text-black">Tel/WhatsApp: {settings.phoneWhatsapp}</p>
+                </div>
+
+                {/* Big Order & Client Banner */}
+                <div className="bg-black text-white p-2.5 rounded text-center space-y-0.5">
+                  <div className="font-black text-xl tracking-wider">
+                    PEDIDO #{printOrderModal.orderNumber}
+                  </div>
+                  <div className="font-black text-sm uppercase">
+                    CLIENTE: {printOrderModal.customerName}
+                  </div>
+                  <div className="text-xs font-bold opacity-90">
+                    {printOrderModal.deliveryType === 'entrega'
+                      ? '🛵 ENTREGA (MOTOBOY)'
+                      : printOrderModal.deliveryType === 'retirada'
+                      ? '🏬 RETIRADA NO BALCÃO'
+                      : '🍽️ CONSUMO NO LOCAL'}
+                  </div>
+                </div>
+
+                {/* Delivery Address & Details (If Delivery Mode or has address) */}
+                {printOrderModal.tableOrAddress && (
+                  <div className="border-2 border-black rounded p-2.5 bg-slate-50 space-y-1">
+                    <div className="text-xs font-black uppercase text-black">
+                      📍 Endereço de Entrega:
+                    </div>
+                    <div className="text-sm font-black text-black leading-snug">
+                      {printOrderModal.tableOrAddress.toUpperCase()}
+                    </div>
+                    {printOrderModal.customerPhone && (
+                      <div className="text-xs font-bold text-black pt-0.5">
+                        📞 Telefone: {printOrderModal.customerPhone}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
 
-              <div className="text-[11px] space-y-0.5 pt-1">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>R$ {printOrderModal.subtotal.toFixed(2).replace('.', ',')}</span>
+                {/* Marmitas Content (Filtered or All) */}
+                <div className="space-y-3 border-y-2 border-black py-2.5">
+                  {(labelMode === 'tampa' && typeof labelSelectedItemIndex === 'number' && printOrderModal.items[labelSelectedItemIndex]
+                    ? [printOrderModal.items[labelSelectedItemIndex]]
+                    : printOrderModal.items
+                  ).map((i, idx) => {
+                    const realIdx = typeof labelSelectedItemIndex === 'number' ? labelSelectedItemIndex : idx;
+                    return (
+                      <div
+                        key={i.id || idx}
+                        className="border-2 border-black rounded p-3 space-y-2 bg-white"
+                      >
+                        {/* Marmita Title */}
+                        <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
+                          <span className="font-black text-base uppercase text-black">
+                            🍱 {i.quantity}x {i.sizeName.toUpperCase()}
+                          </span>
+                          {printOrderModal.items.length > 1 && (
+                            <span className="bg-black text-white px-2 py-0.5 rounded text-xs font-black">
+                              {realIdx + 1} de {printOrderModal.items.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* CARNES - DESTAQUE MÁXIMO */}
+                        <div className="bg-slate-100 border-l-4 border-black p-2 rounded-xs">
+                          <div className="text-[11px] font-black uppercase text-black">
+                            🥩 CARNES / PROTEÍNAS:
+                          </div>
+                          <div className={`font-black uppercase text-black leading-tight ${labelFontSize === 'grande' ? 'text-base' : 'text-sm'}`}>
+                            {i.proteinas.length > 0 ? i.proteinas.join(' + ') : 'Sem carnes especificadas'}
+                          </div>
+                        </div>
+
+                        {/* Acompanhamentos */}
+                        <div className={`space-y-1 text-black ${labelFontSize === 'grande' ? 'text-xs' : 'text-[11px]'}`}>
+                          <div>
+                            <strong>🍚 Base:</strong> {i.bases.join(', ')} | <strong>Feijão:</strong> {i.feijoes.join(', ')}
+                          </div>
+                          {i.guarnicoes.length > 0 && (
+                            <div>
+                              <strong>🥗 Guarnições:</strong> {i.guarnicoes.join(', ')}
+                            </div>
+                          )}
+                          {i.saladas.length > 0 && (
+                            <div>
+                              <strong>🥬 Salada:</strong> {i.saladas.join(', ')}
+                            </div>
+                          )}
+                          {i.adicionais.length > 0 && (
+                            <div>
+                              <strong>⭐ Extras:</strong> {i.adicionais.map((a) => a.name).join(', ')}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Observações da Marmita (Caixa de Alerta) */}
+                        {i.notes && (
+                          <div className="border-2 border-dashed border-black bg-amber-100/80 p-2 rounded text-xs font-black text-black">
+                            ⚠️ OBS DA MARMITA: {i.notes.toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Bebidas do Pedido */}
+                  {printOrderModal.beverages.length > 0 && (
+                    <div className="border-2 border-black rounded p-2.5 bg-slate-50 space-y-1">
+                      <div className="text-xs font-black uppercase text-black">
+                        🥤 Bebidas do Pedido:
+                      </div>
+                      <div className="text-sm font-black text-black">
+                        {printOrderModal.beverages.map((b) => `${b.quantity}x ${b.name}`).join(', ')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Observação Geral do Pedido */}
+                  {printOrderModal.generalNotes && (
+                    <div className="border-2 border-dashed border-black bg-amber-100/80 p-2.5 rounded text-xs font-black text-black">
+                      ⚠️ OBSERVAÇÃO GERAL: {printOrderModal.generalNotes.toUpperCase()}
+                    </div>
+                  )}
                 </div>
-                {printOrderModal.deliveryFee > 0 && (
-                  <div className="flex justify-between">
-                    <span>Taxa Entrega:</span>
-                    <span>R$ {printOrderModal.deliveryFee.toFixed(2).replace('.', ',')}</span>
+
+                {/* Financial Summary & Payment */}
+                <div className="border-2 border-black rounded p-2.5 space-y-1.5 bg-slate-50 text-xs text-black">
+                  <div className="flex justify-between font-bold">
+                    <span>Subtotal:</span>
+                    <span>R$ {printOrderModal.subtotal.toFixed(2).replace('.', ',')}</span>
                   </div>
-                )}
-                <div className="flex justify-between font-black text-sm pt-1 border-t border-slate-400">
-                  <span>TOTAL A PAGAR:</span>
-                  <span>R$ {printOrderModal.total.toFixed(2).replace('.', ',')}</span>
+                  {printOrderModal.deliveryFee > 0 && (
+                    <div className="flex justify-between font-bold">
+                      <span>Taxa de Entrega:</span>
+                      <span>R$ {printOrderModal.deliveryFee.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  )}
+                  {printOrderModal.discount > 0 && (
+                    <div className="flex justify-between font-bold">
+                      <span>Desconto:</span>
+                      <span>- R$ {printOrderModal.discount.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between font-black text-base border-t-2 border-black pt-1">
+                    <span>TOTAL A PAGAR:</span>
+                    <span>R$ {printOrderModal.total.toFixed(2).replace('.', ',')}</span>
+                  </div>
+
+                  <div className="bg-black text-white p-2 rounded text-center space-y-0.5 mt-1">
+                    <div className="font-black text-xs uppercase tracking-wider">
+                      FORMA: {printOrderModal.paymentMethod.toUpperCase()} ({printOrderModal.isPaid ? 'PAGO / LIQUIDADO' : 'PAGAR NA ENTREGA'})
+                    </div>
+                    {printOrderModal.changeFor && (
+                      <div className="font-black text-xs text-amber-300">
+                        LEVAR TROCO PARA R$ {printOrderModal.changeFor}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-center pt-1 font-bold">
-                  Forma: {printOrderModal.paymentMethod.toUpperCase()} ({printOrderModal.isPaid ? 'PAGO' : 'PAGAR NA ENTREGA'})
-                  {printOrderModal.changeFor ? ` - Troco p/ R$ ${printOrderModal.changeFor}` : ''}
+
+                {/* Footer */}
+                <div className="text-center pt-1 border-t border-dashed border-black text-[10px] font-bold text-black">
+                  🔥 Bom Apetite • Obrigado pela Preferência! 🔥
                 </div>
               </div>
             </div>
 
-            {/* Print Button */}
-            <div className="flex items-center gap-2">
+            {/* Bottom Actions */}
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2 border-t border-slate-200">
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-2xl font-black text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-md"
+                onClick={handlePrintMarmitaLabel}
+                disabled={isPrintingLabel}
+                className="w-full sm:flex-2 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all"
               >
-                <Printer className="w-4 h-4" />
-                <span>Imprimir Agora</span>
+                <Printer className="w-4 h-4 text-amber-400" />
+                <span>{isPrintingLabel ? 'Enviando p/ Impressora...' : 'Imprimir Etiqueta Térmica'}</span>
               </button>
+
+              <button
+                type="button"
+                onClick={handleShareMarmitaWhatsApp}
+                className="w-full sm:flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center space-x-1.5 cursor-pointer shadow-md transition-all"
+              >
+                <Send className="w-4 h-4" />
+                <span>WhatsApp</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setPrintOrderModal(null)}
-                className="px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                className="w-full sm:w-auto px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer transition-colors"
               >
                 Fechar
               </button>

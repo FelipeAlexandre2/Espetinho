@@ -66,14 +66,15 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
 
   // Filter logs
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
+    return (logs || []).filter((log) => {
+      if (!log) return false;
       // Search match
       const query = searchTerm.toLowerCase();
       const matchSearch =
         !searchTerm ||
-        log.title.toLowerCase().includes(query) ||
-        log.description.toLowerCase().includes(query) ||
-        log.userName.toLowerCase().includes(query) ||
+        (log.title && log.title.toLowerCase().includes(query)) ||
+        (log.description && log.description.toLowerCase().includes(query)) ||
+        (log.userName && log.userName.toLowerCase().includes(query)) ||
         (log.details?.targetName && String(log.details.targetName).toLowerCase().includes(query)) ||
         (log.details?.table && String(log.details.table).toLowerCase().includes(query)) ||
         (log.ipAddress && log.ipAddress.toLowerCase().includes(query));
@@ -106,11 +107,12 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
 
   // Summary Metrics
   const metrics = useMemo(() => {
-    const total = logs.length;
-    const loginsCount = logs.filter((l) => l.category === 'login').length;
-    const menuChangesCount = logs.filter((l) => l.category === 'cardapio').length;
-    const stockChangesCount = logs.filter((l) => l.category === 'estoque').length;
-    const alertsCount = logs.filter((l) => l.severity === 'warning' || l.severity === 'danger').length;
+    const list = logs || [];
+    const total = list.length;
+    const loginsCount = list.filter((l) => l && l.category === 'login').length;
+    const menuChangesCount = list.filter((l) => l && l.category === 'cardapio').length;
+    const stockChangesCount = list.filter((l) => l && l.category === 'estoque').length;
+    const alertsCount = list.filter((l) => l && (l.severity === 'warning' || l.severity === 'danger')).length;
 
     return { total, loginsCount, menuChangesCount, stockChangesCount, alertsCount };
   }, [logs]);
@@ -445,7 +447,7 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
             }`}
           >
             <UtensilsCrossed className="w-3.5 h-3.5" />
-            <span>Cardápio ({logs.filter((l) => l.category === 'cardapio').length})</span>
+            <span>Cardápio ({(logs || []).filter((l) => l && l.category === 'cardapio').length})</span>
           </button>
 
           <button
@@ -457,7 +459,7 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
             }`}
           >
             <LogIn className="w-3.5 h-3.5" />
-            <span>Logins ({logs.filter((l) => l.category === 'login').length})</span>
+            <span>Logins ({(logs || []).filter((l) => l && l.category === 'login').length})</span>
           </button>
 
           <button
@@ -469,7 +471,7 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
             }`}
           >
             <DollarSign className="w-3.5 h-3.5" />
-            <span>Caixa & Vendas ({logs.filter((l) => l.category === 'caixa').length})</span>
+            <span>Caixa & Vendas ({(logs || []).filter((l) => l && l.category === 'caixa').length})</span>
           </button>
 
           <button
@@ -481,7 +483,7 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
             }`}
           >
             <Package className="w-3.5 h-3.5" />
-            <span>Estoque ({logs.filter((l) => l.category === 'estoque').length})</span>
+            <span>Estoque ({(logs || []).filter((l) => l && l.category === 'estoque').length})</span>
           </button>
 
           <button
@@ -493,7 +495,7 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
             }`}
           >
             <ClipboardList className="w-3.5 h-3.5" />
-            <span>Pedidos ({logs.filter((l) => l.category === 'pedidos').length})</span>
+            <span>Pedidos ({(logs || []).filter((l) => l && l.category === 'pedidos').length})</span>
           </button>
 
           <button
@@ -505,7 +507,7 @@ export const AuditoriaTab: React.FC<AuditoriaTabProps> = ({
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>Usuários & Permissões ({logs.filter((l) => l.category === 'usuarios').length})</span>
+            <span>Usuários & Permissões ({(logs || []).filter((l) => l && l.category === 'usuarios').length})</span>
           </button>
         </div>
       </div>

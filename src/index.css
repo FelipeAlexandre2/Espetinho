@@ -38,7 +38,7 @@
     visibility: visible !important;
   }
 
-  /* Impressão de Cupom Térmico (Comprovante de Pedido / Caixa) */
+  /* Impressão de Cupom Térmico (Comprovante de Pedido / Caixa / Marmitaria) */
   .printable-receipt {
     position: absolute !important;
     left: 0 !important;
@@ -48,7 +48,8 @@
     padding: 8px 6px !important;
     background: #ffffff !important;
     color: #000000 !important;
-    font-family: 'Courier New', Courier, monospace !important;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+    font-weight: 700 !important;
     box-shadow: none !important;
     border: none !important;
     z-index: 999999 !important;

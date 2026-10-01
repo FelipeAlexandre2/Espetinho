@@ -414,7 +414,33 @@ export const Navbar: React.FC<NavbarProps> = ({
               {!canAccessRelatorios && <Lock className="w-3 h-3 text-emerald-500/70 ml-0.5" />}
             </button>
 
-            {/* Tab 7: Configurações (Dropdown: Somente Equipe & Usuários e Auditoria) */}
+            {/* Tab 7: Marmitaria (Visível SOMENTE para quem tem permissão access_marmitaria) */}
+            {canAccessMarmitaria && (
+              <button
+                id="navbar-tab-marmitaria"
+                type="button"
+                onClick={() => {
+                  if (onSelectModule) onSelectModule('marmitaria');
+                  setActiveTab('marmitaria');
+                }}
+                className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer shrink-0 active:scale-95 ${
+                  activeTab === 'marmitaria'
+                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30 ring-2 ring-orange-400/40'
+                    : 'text-orange-400 hover:text-white hover:bg-orange-500/20 border border-orange-500/30'
+                }`}
+                title="Acessar Módulo Marmitaria & Marmitex"
+              >
+                <ChefHat className="w-4 h-4 text-orange-400" />
+                <span>🍱 Marmitaria</span>
+                {marmitaOrdersCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 bg-amber-400 text-slate-950 text-[10px] font-black rounded-full">
+                    {marmitaOrdersCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Tab 8: Configurações (Dropdown: Somente Equipe & Usuários e Auditoria) */}
             <div className="relative shrink-0" ref={settingsDropdownRef}>
               <button
                 type="button"
@@ -509,6 +535,66 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
     )}
+
+      {/* Main Navigation Bar - When inside Marmitaria (Apenas para quem tem permissão) */}
+      {currentModule === 'marmitaria' && canAccessMarmitaria && (
+        <div className="hidden sm:block bg-slate-950/90 border-t border-slate-800 shadow-inner">
+          <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+            <nav className="flex items-center space-x-1 sm:space-x-2 py-2 overflow-x-auto scrollbar-none touch-pan-x whitespace-nowrap" aria-label="Tabs Marmitaria">
+              {/* Marmitaria PDV & Montagem */}
+              <button
+                id="navbar-marmitaria-pdv-tab"
+                type="button"
+                onClick={() => setActiveTab('marmitaria')}
+                className={`flex items-center space-x-1.5 sm:space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer shrink-0 active:scale-95 ${
+                  activeTab === 'marmitaria'
+                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30 ring-2 ring-orange-400/40'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <ChefHat className="w-4 h-4" />
+                <span>🍱 PDV de Montagem & Marmitex</span>
+                {marmitaOrdersCount > 0 && (
+                  <span className="ml-1 px-2 py-0.5 text-[10px] font-black rounded-full bg-amber-400 text-slate-950">
+                    {marmitaOrdersCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Botão de Retorno ao EspetoPro */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSelectModule) onSelectModule('espetos');
+                  setActiveTab('caixa');
+                }}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-red-400 hover:text-white hover:bg-red-500/20 border border-red-500/30 transition-all cursor-pointer shrink-0 active:scale-95"
+                title="Voltar para o sistema de Espetos & Balcão"
+              >
+                <Flame className="w-4 h-4 text-red-500" />
+                <span>🍖 Alternar para EspetoPro</span>
+              </button>
+
+              {/* Equipe & Configurações */}
+              {(canAccessUsuarios || canAccessAuditoria) && (
+                <div className="relative shrink-0 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSelectModule) onSelectModule('espetos');
+                      setActiveTab(canAccessUsuarios ? 'usuarios' : 'auditoria');
+                    }}
+                    className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800/60 transition cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4 text-slate-400" />
+                    <span>Configurações & Equipe</span>
+                  </button>
+                </div>
+              )}
+            </nav>
+          </div>
+        </div>
+      )}
 
       {/* Quick Operator Switch Modal */}
       {isSwitchModalOpen && (
@@ -834,6 +920,33 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
               <span className="text-[8px] font-extrabold leading-none mt-1 truncate w-full text-center">Vendas</span>
             </button>
+
+            {/* Mobile Tab: Marmitaria (Visível SOMENTE para quem tem permissão access_marmitaria) */}
+            {canAccessMarmitaria && (
+              <button
+                id="mobile-nav-marmitaria-tab"
+                onClick={() => {
+                  if (onSelectModule) onSelectModule('marmitaria');
+                  setActiveTab('marmitaria');
+                }}
+                className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all cursor-pointer active:scale-95 min-w-0 ${
+                  activeTab === 'marmitaria'
+                    ? 'bg-orange-500/20 text-orange-400 font-extrabold shadow-2xs border border-orange-500/30'
+                    : 'text-orange-400 hover:text-orange-300'
+                }`}
+                title="Acessar Módulo Marmitaria"
+              >
+                <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
+                  <ChefHat className="w-4 h-4 text-orange-400" />
+                  {marmitaOrdersCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 px-1 py-0.1 text-[8px] font-black rounded-full bg-orange-500 text-white shadow-2xs">
+                      {marmitaOrdersCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[8px] font-extrabold leading-none mt-1 truncate w-full text-center">Marmitas</span>
+              </button>
+            )}
 
             {/* Mobile Tab 7: Engrenagem (Configurações: Somente Equipe & Auditoria) */}
             <button

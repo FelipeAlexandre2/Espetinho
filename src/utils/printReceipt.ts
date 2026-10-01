@@ -3,6 +3,9 @@ import { Order, ReceiptSettings, ReceiptPaperWidth, ReceiptType, DEFAULT_RECEIPT
 const RECEIPT_SETTINGS_STORAGE_KEY = 'espetinho_receipt_settings_v1';
 
 export function getReceiptSettings(): ReceiptSettings {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return DEFAULT_RECEIPT_SETTINGS;
+  }
   try {
     const raw = localStorage.getItem(RECEIPT_SETTINGS_STORAGE_KEY);
     if (raw) {
@@ -15,6 +18,9 @@ export function getReceiptSettings(): ReceiptSettings {
 }
 
 export function saveReceiptSettings(settings: ReceiptSettings): void {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
   try {
     localStorage.setItem(RECEIPT_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (err) {
@@ -40,10 +46,10 @@ export function generateReceiptHtml(
 
   const widthStyle =
     paperWidth === '58mm'
-      ? 'width: 48mm; max-width: 54mm; font-size: 11px; margin: 0 auto;'
+      ? 'width: 50mm; max-width: 54mm; font-size: 13px; margin: 0 auto;'
       : paperWidth === '80mm'
-      ? 'width: 72mm; max-width: 78mm; font-size: 13px; margin: 0 auto;'
-      : 'width: 100%; max-width: 450px; font-size: 13px; margin: 0 auto;';
+      ? 'width: 74mm; max-width: 78mm; font-size: 15px; margin: 0 auto;'
+      : 'width: 100%; max-width: 450px; font-size: 15px; margin: 0 auto;';
 
   const typeHeader = isKitchen
     ? '🔥 COMANDA DE COZINHA / GRELHA 🔥'
@@ -64,24 +70,24 @@ export function generateReceiptHtml(
       const itemTotalFormatted = (item.price * item.quantity).toFixed(2).replace('.', ',');
 
       return `
-        <div style="margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed #e2e8f0;">
-          <div style="display: flex; justify-content: space-between; font-weight: bold; color: #0f172a;">
-            <span style="font-size: ${isKitchen ? '14px' : 'inherit'};">
-              ${item.quantity}x ${item.productName}
+        <div style="margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px dashed #000000;">
+          <div style="display: flex; justify-content: space-between; font-weight: 900; color: #000000; font-size: ${isKitchen ? '16px' : '15px'};">
+            <span>
+              ${item.quantity}x ${item.productName.toUpperCase()}
             </span>
-            ${!isKitchen ? `<span>R$ ${itemTotalFormatted}</span>` : ''}
+            ${!isKitchen ? `<span style="font-weight: 900;">R$ ${itemTotalFormatted}</span>` : ''}
           </div>
           ${
             meatPointLabel
-              ? `<div style="font-weight: 900; color: #b45309; padding-left: 8px; font-size: 12px;">
+              ? `<div style="font-weight: 900; color: #000000; background: #f1f5f9; padding: 2px 6px; margin-top: 3px; font-size: 13px; border-left: 3px solid #000000;">
                   ▸ PONTO: ${meatPointLabel}
                 </div>`
               : ''
           }
           ${
             item.notes
-              ? `<div style="font-style: italic; color: #475569; padding-left: 8px; font-size: 11px;">
-                  * Obs: ${item.notes}
+              ? `<div style="font-weight: 900; color: #000000; padding: 2px 6px; margin-top: 3px; font-size: 13px; border: 1px dashed #000000; background: #fffbeb;">
+                  ⚠️ OBS: ${item.notes.toUpperCase()}
                 </div>`
               : ''
           }
@@ -176,20 +182,20 @@ export function generateReceiptHtml(
     <div class="divider"></div>
 
     <!-- Order & Table Info -->
-    <div class="flex-between bold" style="font-size: ${isKitchen ? '15px' : '13px'};">
+    <div class="flex-between bold" style="font-size: ${isKitchen ? '19px' : '17px'}; border-bottom: 2px solid #000000; padding-bottom: 4px;">
       <span>PEDIDO #${order.orderNumber}</span>
       <span style="text-transform: uppercase;">${order.tableOrCustomer}</span>
     </div>
 
-    <div class="flex-between" style="font-size: 10px; margin-top: 2px;">
+    <div class="flex-between" style="font-size: 12px; font-weight: bold; margin-top: 3px;">
       <span>Data: ${formattedDate}</span>
       <span>Hora: ${formattedTime}</span>
     </div>
 
     ${
       order.notes
-        ? `<div style="font-size: 11px; margin-top: 4px; padding: 2px; border: 1px dashed #64748b;">
-            <strong>Obs Geral:</strong> ${order.notes}
+        ? `<div style="font-size: 13px; font-weight: 900; margin-top: 5px; padding: 4px; border: 2px dashed #000000; background: #fffbeb;">
+            ⚠️ OBS GERAL: ${order.notes.toUpperCase()}
           </div>`
         : ''
     }
@@ -197,7 +203,7 @@ export function generateReceiptHtml(
     <div class="divider-double"></div>
 
     <!-- Items Header -->
-    <div class="flex-between bold" style="font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">
+    <div class="flex-between bold" style="font-size: 12px; text-transform: uppercase; margin-bottom: 5px; border-bottom: 1px solid #000000; padding-bottom: 2px;">
       <span>Qtd Descrição</span>
       ${!isKitchen ? '<span>Total</span>' : ''}
     </div>
@@ -213,15 +219,15 @@ export function generateReceiptHtml(
       <div class="divider"></div>
 
       <!-- Financial Totals -->
-      <div style="font-size: 11px;">
-        <div class="flex-between">
+      <div style="font-size: 13px;">
+        <div class="flex-between" style="font-weight: bold;">
           <span>Subtotal Itens:</span>
           <span>R$ ${order.subtotal.toFixed(2).replace('.', ',')}</span>
         </div>
 
         ${
           order.serviceFee > 0
-            ? `<div class="flex-between">
+            ? `<div class="flex-between" style="font-weight: bold;">
                 <span>Taxa de Serviço:</span>
                 <span>R$ ${order.serviceFee.toFixed(2).replace('.', ',')}</span>
               </div>`
@@ -230,7 +236,7 @@ export function generateReceiptHtml(
 
         ${
           order.discount > 0
-            ? `<div class="flex-between" style="font-weight: bold;">
+            ? `<div class="flex-between" style="font-weight: 900;">
                 <span>Desconto Especial:</span>
                 <span>- R$ ${order.discount.toFixed(2).replace('.', ',')}</span>
               </div>`
@@ -239,17 +245,50 @@ export function generateReceiptHtml(
 
         <div class="divider"></div>
 
-        <div class="flex-between bolder" style="font-size: 15px; margin: 4px 0;">
+        <div class="flex-between bolder" style="font-size: 18px; margin: 5px 0;">
           <span>TOTAL A PAGAR:</span>
           <span>R$ ${order.total.toFixed(2).replace('.', ',')}</span>
         </div>
 
-        <div class="flex-between" style="font-size: 11px; margin-top: 4px;">
-          <span>Forma de Pagamento:</span>
-          <span class="bold" style="text-transform: uppercase;">${order.paymentMethod || 'Não Definido'}</span>
-        </div>
+        ${
+          order.payments && order.payments.length > 1
+            ? `
+          <div style="font-size: 12px; margin-top: 4px; border: 1px solid #000; padding: 4px; border-radius: 2px;">
+            <div class="flex-between bold" style="font-size: 13px;">
+              <span>FORMAS DE PAGAMENTO:</span>
+              <span>MÚLTIPLAS (${order.payments.length})</span>
+            </div>
+            ${order.payments
+              .map(
+                (p) => `
+              <div class="flex-between" style="font-size: 12px; padding-left: 6px; font-weight: bold;">
+                <span>• ${(p.method === 'dinheiro' ? 'Dinheiro' : p.method === 'pix' ? 'Pix' : p.method === 'credito' ? 'Crédito' : 'Débito').toUpperCase()}:</span>
+                <span class="bold">R$ ${p.amount.toFixed(2).replace('.', ',')}${p.method === 'dinheiro' && p.change && p.change > 0 ? ` (Troco R$ ${p.change.toFixed(2).replace('.', ',')})` : ''}</span>
+              </div>
+            `
+              )
+              .join('')}
+            ${
+              order.change && order.change > 0
+                ? `
+              <div class="flex-between bold" style="font-size: 12px; padding-left: 6px; margin-top: 2px; color: #000;">
+                <span>Troco Total Devolvido:</span>
+                <span>R$ ${order.change.toFixed(2).replace('.', ',')}</span>
+              </div>
+            `
+                : ''
+            }
+          </div>
+        `
+            : `
+          <div class="flex-between bold" style="font-size: 13px; margin-top: 4px;">
+            <span>Forma de Pagamento:</span>
+            <span class="bold" style="text-transform: uppercase;">${order.paymentMethod || 'Não Definido'}</span>
+          </div>
+        `
+        }
 
-        <div class="flex-between" style="font-size: 11px;">
+        <div class="flex-between bold" style="font-size: 13px; margin-top: 2px;">
           <span>Status do Pagamento:</span>
           <span class="bold">${order.isPaid ? 'PAGO / LIQUIDADO' : 'PENDENTE'}</span>
         </div>
@@ -436,7 +475,17 @@ export function formatReceiptWhatsAppText(
       text += `🏷️ *Desconto:* - R$ ${order.discount.toFixed(2).replace('.', ',')}\n`;
     }
     text += `💰 *TOTAL A PAGAR:* R$ ${order.total.toFixed(2).replace('.', ',')}\n`;
-    text += `💳 *Pagamento:* ${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'PENDENTE'} (${order.isPaid ? 'PAGO ✅' : 'PENDENTE ⏳'})\n`;
+    if (order.payments && order.payments.length > 1) {
+      text += `💳 *Formas de Pagamento (Múltiplas):*\n`;
+      order.payments.forEach((p) => {
+        text += `   • ${p.method.toUpperCase()}: R$ ${p.amount.toFixed(2).replace('.', ',')}${p.method === 'dinheiro' && p.change && p.change > 0 ? ` (Troco R$ ${p.change.toFixed(2).replace('.', ',')})` : ''}\n`;
+      });
+      if (order.change && order.change > 0) {
+        text += `   💵 *Troco Devolvido:* R$ ${order.change.toFixed(2).replace('.', ',')}\n`;
+      }
+    } else {
+      text += `💳 *Pagamento:* ${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'PENDENTE'} (${order.isPaid ? 'PAGO ✅' : 'PENDENTE ⏳'})\n`;
+    }
     text += `━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `${settings.footerMessage || 'Obrigado pela preferência! Volte sempre 🔥'}\n`;
     if (settings.phone) text += `WhatsApp: ${settings.phone}\n`;
@@ -525,7 +574,17 @@ export function formatReceiptRawText(
     lines.push(doubleSeparator);
     lines.push(padBetween('TOTAL A PAGAR:', `R$ ${order.total.toFixed(2).replace('.', ',')}`));
     lines.push(separator);
-    lines.push(padBetween('Forma Pagto:', (order.paymentMethod || 'DINHEIRO').toUpperCase()));
+    if (order.payments && order.payments.length > 1) {
+      lines.push(padBetween('Formas Pagto:', `MULTIPLAS (${order.payments.length})`));
+      order.payments.forEach((p) => {
+        lines.push(padBetween(`  * ${p.method.toUpperCase()}:`, `R$ ${p.amount.toFixed(2).replace('.', ',')}`));
+      });
+      if (order.change && order.change > 0) {
+        lines.push(padBetween('  * Troco Dinheiro:', `R$ ${order.change.toFixed(2).replace('.', ',')}`));
+      }
+    } else {
+      lines.push(padBetween('Forma Pagto:', (order.paymentMethod || 'DINHEIRO').toUpperCase()));
+    }
     lines.push(padBetween('Status:', order.isPaid ? 'PAGO' : 'PENDENTE'));
     lines.push(separator);
     lines.push(padCenter(settings.footerMessage || 'OBRIGADO PELA PREFERENCIA!'));

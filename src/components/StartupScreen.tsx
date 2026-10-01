@@ -1,10 +1,10 @@
 import React from 'react';
-import { SystemModule, AppUser, ROLE_CONFIG } from '../types';
+import { SystemModule, AppUser, ROLE_CONFIG, hasPermission } from '../types';
 import { 
   Flame, ChefHat, Sparkles, ArrowRight, 
   CheckCircle2, UtensilsCrossed, Package, 
   Clock, DollarSign, Users, LogOut, ChevronRight,
-  ShieldCheck, Smartphone, Printer, Store
+  ShieldCheck, Smartphone, Printer, Store, Lock
 } from 'lucide-react';
 
 interface StartupScreenProps {
@@ -23,19 +23,20 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
   onLogout
 }) => {
   const [rememberChoice, setRememberChoice] = React.useState<boolean>(false);
+  const canAccessMarmitaria = hasPermission(currentUser, 'access_marmitaria');
 
-  // Keyboard shortcuts (1 for Espetos, 2 for Marmitaria)
+  // Keyboard shortcuts (1 for Espetos, 2 for Marmitaria if permitted)
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === '1') {
         onSelectSystem('espetos', rememberChoice);
-      } else if (e.key === '2') {
+      } else if (e.key === '2' && canAccessMarmitaria) {
         onSelectSystem('marmitaria', rememberChoice);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onSelectSystem, rememberChoice]);
+  }, [onSelectSystem, rememberChoice, canAccessMarmitaria]);
 
   return (
     <div id="startup-screen-container" className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between relative overflow-hidden select-none">
@@ -99,8 +100,8 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
           </p>
         </div>
 
-        {/* 2 Big Choice Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8 w-full">
+        {/* Choice Cards (Marmitaria appears ONLY if permitted) */}
+        <div className={`grid gap-5 sm:gap-8 w-full ${canAccessMarmitaria ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-xl mx-auto'}`}>
           {/* Card 1: Sistema EspetoPro */}
           <div 
             id="card-select-espetos"
@@ -180,84 +181,86 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
             </div>
           </div>
 
-          {/* Card 2: Sistema Marmitaria */}
-          <div 
-            id="card-select-marmitaria"
-            onClick={() => onSelectSystem('marmitaria', rememberChoice)}
-            className="group relative bg-slate-900/90 hover:bg-slate-900 border-2 border-slate-800 hover:border-orange-500/80 rounded-3xl p-6 sm:p-8 flex flex-col justify-between transition-all duration-200 hover:shadow-2xl hover:shadow-orange-950/40 cursor-pointer active:scale-[0.99]"
-          >
-            {/* Shortcut chip */}
-            <div className="absolute top-5 right-5 flex items-center space-x-1.5">
-              <span className="hidden sm:inline-block px-2 py-0.5 bg-slate-800 group-hover:bg-orange-500/20 group-hover:text-orange-300 text-slate-400 text-[11px] font-mono font-bold rounded-lg border border-slate-700 group-hover:border-orange-500/40 transition">
-                Atalho: [2]
-              </span>
-            </div>
+          {/* Card 2: Sistema Marmitaria (Visível SOMENTE para quem tem permissão access_marmitaria) */}
+          {canAccessMarmitaria && (
+            <div 
+              id="card-select-marmitaria"
+              onClick={() => onSelectSystem('marmitaria', rememberChoice)}
+              className="group relative bg-slate-900/90 hover:bg-slate-900 border-2 border-slate-800 hover:border-orange-500/80 rounded-3xl p-6 sm:p-8 flex flex-col justify-between transition-all duration-200 hover:shadow-2xl hover:shadow-orange-950/40 cursor-pointer active:scale-[0.99]"
+            >
+              {/* Shortcut chip */}
+              <div className="absolute top-5 right-5 flex items-center space-x-1.5">
+                <span className="hidden sm:inline-block px-2 py-0.5 bg-slate-800 group-hover:bg-orange-500/20 group-hover:text-orange-300 text-slate-400 text-[11px] font-mono font-bold rounded-lg border border-slate-700 group-hover:border-orange-500/40 transition">
+                  Atalho: [2]
+                </span>
+              </div>
 
-            <div className="space-y-5">
-              {/* Icon & Title */}
-              <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 group-hover:scale-105 group-hover:bg-orange-500 group-hover:text-white transition-all duration-200 shadow-md">
-                  <ChefHat className="w-7 h-7 sm:w-8 sm:h-8" />
+              <div className="space-y-5">
+                {/* Icon & Title */}
+                <div className="flex items-center space-x-4">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 group-hover:scale-105 group-hover:bg-orange-500 group-hover:text-white transition-all duration-200 shadow-md">
+                    <ChefHat className="w-7 h-7 sm:w-8 sm:h-8" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-orange-400 flex items-center gap-1">
+                      Marmitex & Delivery
+                    </span>
+                    <h3 className="text-xl sm:text-2xl font-black text-white group-hover:text-orange-400 transition-colors">
+                      Sistema Marmitaria
+                    </h3>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-orange-400 flex items-center gap-1">
-                    Marmitex & Delivery
-                  </span>
-                  <h3 className="text-xl sm:text-2xl font-black text-white group-hover:text-orange-400 transition-colors">
-                    Sistema Marmitaria
-                  </h3>
+
+                {/* Description */}
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                  PDV ultrarrápido de montagem de marmitas (P, M, G, Executiva), carnes do dia, feijão, arroz, guarnições, KDS de linha de montagem, despacho e gestão de entregadores.
+                </p>
+
+                {/* Feature Highlights */}
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
+                    <ChefHat className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <span>Montagem P, M, G & Exec.</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
+                    <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>KDS Cozinha & Expedição</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
+                    <Printer className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span>Comprovante Térmico 80/58</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Delivery, Balcão & Motoboy</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Description */}
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                PDV ultrarrápido de montagem de marmitas (P, M, G, Executiva), carnes do dia, feijão, arroz, guarnições, KDS de linha de montagem, despacho e gestão de entregadores.
-              </p>
+              {/* Bottom Status & CTA */}
+              <div className="pt-6 mt-6 border-t border-slate-800 flex items-center justify-between">
+                <div className="text-xs text-slate-400">
+                  {marmitaOrdersCount > 0 ? (
+                    <span className="text-orange-400 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                      {marmitaOrdersCount} marmitas em produção
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">Pronto para montagem</span>
+                  )}
+                </div>
 
-              {/* Feature Highlights */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
-                  <ChefHat className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                  <span>Montagem P, M, G & Exec.</span>
-                </div>
-                <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
-                  <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span>KDS Cozinha & Expedição</span>
-                </div>
-                <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
-                  <Printer className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                  <span>Comprovante Térmico 80/58</span>
-                </div>
-                <div className="flex items-center space-x-2 text-xs text-slate-300 bg-slate-950/50 p-2 rounded-xl border border-slate-800/80">
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>Delivery, Balcão & Motoboy</span>
-                </div>
+                <button
+                  id="btn-iniciar-marmitaria"
+                  type="button"
+                  className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-orange-600 group-hover:bg-orange-500 text-white font-black text-xs sm:text-sm transition-all shadow-lg shadow-orange-600/30 group-hover:shadow-orange-500/50 cursor-pointer"
+                >
+                  <span>Iniciar Marmitaria</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
               </div>
             </div>
-
-            {/* Bottom Status & CTA */}
-            <div className="pt-6 mt-6 border-t border-slate-800 flex items-center justify-between">
-              <div className="text-xs text-slate-400">
-                {marmitaOrdersCount > 0 ? (
-                  <span className="text-orange-400 font-bold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-                    {marmitaOrdersCount} marmitas em produção
-                  </span>
-                ) : (
-                  <span className="text-slate-500">Pronto para montagem</span>
-                )}
-              </div>
-
-              <button
-                id="btn-iniciar-marmitaria"
-                type="button"
-                className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-orange-600 group-hover:bg-orange-500 text-white font-black text-xs sm:text-sm transition-all shadow-lg shadow-orange-600/30 group-hover:shadow-orange-500/50 cursor-pointer"
-              >
-                <span>Iniciar Marmitaria</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Helper bottom options */}

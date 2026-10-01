@@ -107,31 +107,33 @@ export const PedidosEstoqueTab: React.FC<PedidosEstoqueTabProps> = ({
   const isItemLowStock = (item: StockItem) => item.currentQty <= item.minQty;
 
   // Filter Orders
-  const filteredOrders = orders.filter((ord) => {
+  const filteredOrders = (orders || []).filter((ord) => {
+    if (!ord) return false;
     const matchesStatus = orderStatusFilter === 'todos' || ord.status === orderStatusFilter;
-    const matchesSearch = ord.tableOrCustomer.toLowerCase().includes(orderSearch.toLowerCase()) ||
-                          ord.orderNumber.toString().includes(orderSearch);
+    const matchesSearch = (ord.tableOrCustomer && ord.tableOrCustomer.toLowerCase().includes(orderSearch.toLowerCase())) ||
+                          (ord.orderNumber && ord.orderNumber.toString().includes(orderSearch));
     return matchesStatus && matchesSearch;
   });
 
   // Filter Stock by Search, Category Filter, and Low Stock Alert Toggle
-  const filteredStock = stock.filter((stk) => {
+  const filteredStock = (stock || []).filter((stk) => {
+    if (!stk) return false;
     const itemNormCat = getNormalizedCategory(stk.category);
     const matchesCategory = stockCategoryFilter === 'todos' || itemNormCat === stockCategoryFilter;
-    const matchesSearch = stk.name.toLowerCase().includes(stockSearch.toLowerCase()) ||
-                           stk.category.toLowerCase().includes(stockSearch.toLowerCase()) ||
-                           stk.supplier.toLowerCase().includes(stockSearch.toLowerCase());
+    const matchesSearch = (stk.name && stk.name.toLowerCase().includes(stockSearch.toLowerCase())) ||
+                           (stk.category && stk.category.toLowerCase().includes(stockSearch.toLowerCase())) ||
+                           (stk.supplier && stk.supplier.toLowerCase().includes(stockSearch.toLowerCase()));
     const matchesLowFilter = !onlyLowStock || isItemLowStock(stk);
     return matchesCategory && matchesSearch && matchesLowFilter;
   });
 
   // Counts for each category & low stock items
-  const comidaCount = stock.filter((s) => getNormalizedCategory(s.category) === 'Comida').length;
-  const bebidaCount = stock.filter((s) => getNormalizedCategory(s.category) === 'Bebida').length;
-  const diversosCount = stock.filter((s) => getNormalizedCategory(s.category) === 'Diversos').length;
+  const comidaCount = (stock || []).filter((s) => s && getNormalizedCategory(s.category) === 'Comida').length;
+  const bebidaCount = (stock || []).filter((s) => s && getNormalizedCategory(s.category) === 'Bebida').length;
+  const diversosCount = (stock || []).filter((s) => s && getNormalizedCategory(s.category) === 'Diversos').length;
 
-  const lowStockCount = stock.filter(isItemLowStock).length;
-  const totalStockValue = stock.reduce((sum, s) => sum + s.currentQty * s.costPrice, 0);
+  const lowStockCount = (stock || []).filter((s) => s && isItemLowStock(s)).length;
+  const totalStockValue = (stock || []).reduce((sum, s) => sum + (s?.currentQty || 0) * (s?.costPrice || 0), 0);
 
   const getMeatPointBadge = (point?: MeatPoint) => {
     switch (point) {
@@ -294,9 +296,10 @@ export const PedidosEstoqueTab: React.FC<PedidosEstoqueTabProps> = ({
     setNewOrderIsPaid(false);
   };
 
-  const filteredModalProducts = products.filter((p) => {
+  const filteredModalProducts = (products || []).filter((p) => {
+    if (!p) return false;
     const matchesCat = newOrderCategory === 'todos' || p.category === newOrderCategory;
-    const matchesSearch = p.name.toLowerCase().includes(newOrderSearch.toLowerCase());
+    const matchesSearch = p.name && p.name.toLowerCase().includes(newOrderSearch.toLowerCase());
     return matchesCat && matchesSearch;
   });
 
@@ -459,9 +462,16 @@ export const PedidosEstoqueTab: React.FC<PedidosEstoqueTabProps> = ({
                     {/* Bottom Row - Totals & Actions */}
                     <div className="pt-3 border-t border-slate-100 space-y-3">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">
-                          Forma Pagto: <strong className="text-slate-800 uppercase">{ord.paymentMethod || 'Pendente'}</strong>
-                        </span>
+                        <div className="text-slate-500">
+                          <span>Forma Pagto: </span>
+                          {ord.payments && ord.payments.length > 1 ? (
+                            <strong className="text-emerald-800 uppercase font-black">
+                              Múltiplo ({ord.payments.map((p) => `${p.method.toUpperCase()} R$ ${p.amount.toFixed(2).replace('.', ',')}`).join(' + ')})
+                            </strong>
+                          ) : (
+                            <strong className="text-slate-800 uppercase">{ord.paymentMethod || 'Pendente'}</strong>
+                          )}
+                        </div>
                         <div className="text-right">
                           <span className="text-slate-400 text-[10px] block">Total Geral</span>
                           <span className="font-black text-emerald-600 text-base">

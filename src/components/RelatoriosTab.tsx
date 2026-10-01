@@ -57,7 +57,8 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
     const weekStart = todayStart - 7 * 24 * 60 * 60 * 1000;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-    return orders.filter((ord) => {
+    return (orders || []).filter((ord) => {
+      if (!ord) return false;
       // Ignore canceled orders in sales reports
       if (ord.status === 'cancelado') return false;
 
@@ -78,8 +79,8 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
 
   // Overall Financial & Sales KPIs
   const metrics = useMemo(() => {
-    const totalSales = filteredOrders.reduce((acc, curr) => acc + curr.total, 0);
-    const paidOrders = filteredOrders.filter((o) => o.isPaid || o.status === 'entregue');
+    const totalSales = filteredOrders.reduce((acc, curr) => acc + (curr?.total || 0), 0);
+    const paidOrders = filteredOrders.filter((o) => o && (o.isPaid || o.status === 'entregue'));
     const totalOrdersCount = filteredOrders.length;
     const avgTicket = totalOrdersCount > 0 ? totalSales / totalOrdersCount : 0;
 
@@ -88,11 +89,12 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
     let totalItemsQuantity = 0;
 
     filteredOrders.forEach((ord) => {
-      ord.items.forEach((item) => {
-        totalItemsQuantity += item.quantity;
-        const matchingProduct = products.find((p) => p.id === item.productId || p.name === item.productName);
-        const unitCost = matchingProduct ? matchingProduct.costPrice : item.price * 0.4;
-        estimatedCost += unitCost * item.quantity;
+      (ord?.items || []).forEach((item) => {
+        if (!item) return;
+        totalItemsQuantity += item.quantity || 0;
+        const matchingProduct = (products || []).find((p) => p && (p.id === item.productId || p.name === item.productName));
+        const unitCost = matchingProduct ? matchingProduct.costPrice : (item.price || 0) * 0.4;
+        estimatedCost += unitCost * (item.quantity || 0);
       });
     });
 
@@ -115,8 +117,9 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
     const salesMap: Record<string, { id: string; name: string; category: string; qty: number; revenue: number; unitPrice: number }> = {};
 
     filteredOrders.forEach((ord) => {
-      ord.items.forEach((item) => {
-        const prodMatch = products.find((p) => p.id === item.productId || p.name === item.productName);
+      (ord?.items || []).forEach((item) => {
+        if (!item) return;
+        const prodMatch = (products || []).find((p) => p && (p.id === item.productId || p.name === item.productName));
         const category = prodMatch?.category || 'espetos_tradicionais';
         const prodId = prodMatch?.id || item.productId || item.productName;
 
@@ -127,12 +130,12 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
             category,
             qty: 0,
             revenue: 0,
-            unitPrice: item.price,
+            unitPrice: item.price || 0,
           };
         }
 
-        salesMap[prodId].qty += item.quantity;
-        salesMap[prodId].revenue += item.price * item.quantity;
+        salesMap[prodId].qty += item.quantity || 0;
+        salesMap[prodId].revenue += (item.price || 0) * (item.quantity || 0);
       });
     });
 
@@ -140,7 +143,7 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
 
     // Apply category filter if set
     if (rankingCategory !== 'todos') {
-      list = list.filter((item) => item.category === rankingCategory);
+      list = (list || []).filter((item) => item && item.category === rankingCategory);
     }
 
     // Sort by quantity sold descending
@@ -159,13 +162,26 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
     };
 
     filteredOrders.forEach((ord) => {
-      const pm = ord.paymentMethod || 'pix';
-      if (methods[pm]) {
-        methods[pm].amount += ord.total;
-        methods[pm].count += 1;
+      if (ord.payments && ord.payments.length > 0) {
+        ord.payments.forEach((split) => {
+          const pm = split.method;
+          if (methods[pm]) {
+            methods[pm].amount += split.amount;
+            methods[pm].count += 1;
+          } else {
+            methods.pix.amount += split.amount;
+            methods.pix.count += 1;
+          }
+        });
       } else {
-        methods.pix.amount += ord.total;
-        methods.pix.count += 1;
+        const pm = ord.paymentMethod || 'pix';
+        if (methods[pm]) {
+          methods[pm].amount += ord.total;
+          methods[pm].count += 1;
+        } else {
+          methods.pix.amount += ord.total;
+          methods.pix.count += 1;
+        }
       }
     });
 
@@ -253,8 +269,8 @@ export const RelatoriosTab: React.FC<RelatoriosTabProps> = ({ orders, products }
 
   // Payment method pie chart data
   const paymentPieData = useMemo(() => {
-    return paymentBreakdown
-      .filter(p => p.amount > 0)
+    return (paymentBreakdown || [])
+      .filter(p => p && p.amount > 0)
       .map(p => ({
         name: p.label,
         value: p.amount,

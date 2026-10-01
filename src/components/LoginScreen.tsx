@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppUser, ROLE_CONFIG, SystemModule } from '../types';
+import { AppUser, ROLE_CONFIG, SystemModule, hasPermission } from '../types';
 import { 
   Flame, KeyRound, ShieldCheck, 
   AlertCircle, Sparkles, ArrowRight, 
@@ -24,7 +24,7 @@ export function LoginScreen({
   onSelectModule,
   onBackToStartup
 }: LoginScreenProps) {
-  const activeUsers = users.filter((u) => u.status === 'ativo');
+  const activeUsers = (users || []).filter((u) => u && u.status === 'ativo');
   
   // Default to first active user or null
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(() => activeUsers[0] || null);
@@ -33,6 +33,15 @@ export function LoginScreen({
   const [isLoading, setIsLoading] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // If selected user doesn't have permission for marmitaria and currentModule is marmitaria, revert to espetos
+  useEffect(() => {
+    if (selectedUser && !hasPermission(selectedUser, 'access_marmitaria') && currentModule === 'marmitaria') {
+      if (onSelectModule) {
+        onSelectModule('espetos');
+      }
+    }
+  }, [selectedUser, currentModule, onSelectModule]);
 
   // Allow physical keyboard typing of numbers & backspace/enter
   useEffect(() => {
@@ -210,18 +219,20 @@ export function LoginScreen({
                 <Flame className="w-3.5 h-3.5" />
                 <span className="hidden xs:inline">Espetos</span>
               </button>
-              <button
-                type="button"
-                onClick={() => onSelectModule('marmitaria')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
-                  currentModule === 'marmitaria'
-                    ? 'bg-orange-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <ChefHat className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Marmitaria</span>
-              </button>
+              {(!selectedUser || hasPermission(selectedUser, 'access_marmitaria')) && (
+                <button
+                  type="button"
+                  onClick={() => onSelectModule('marmitaria')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
+                    currentModule === 'marmitaria'
+                      ? 'bg-orange-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <ChefHat className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Marmitaria</span>
+                </button>
+              )}
             </div>
           )}
 

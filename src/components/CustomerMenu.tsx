@@ -77,8 +77,8 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
     try {
       const allOrders = await fetchOrdersFromApi();
       if (allOrders) {
-        const matching = allOrders.filter(
-          (o) => o.tableOrCustomer.toLowerCase().includes(selectedTable.toLowerCase()) && o.status !== 'cancelado'
+        const matching = (allOrders || []).filter(
+          (o) => o && o.tableOrCustomer && o.tableOrCustomer.toLowerCase().includes(selectedTable.toLowerCase()) && o.status !== 'cancelado'
         );
         setTableOrders(matching);
 
@@ -228,11 +228,12 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
   };
 
   // Filter products
-  const filteredProducts = products.filter((p) => {
+  const filteredProducts = (products || []).filter((p) => {
+    if (!p) return false;
     const matchesCat = selectedCategory === 'todos' || p.category === selectedCategory;
     const matchesSearch = 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCat && matchesSearch;
   });
 

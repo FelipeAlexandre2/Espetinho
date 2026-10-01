@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Product, Order, CashShift, PaymentMethod, OrderItem, TABLES, AppUser, hasPermission } from '../types';
+import { Product, Order, CashShift, PaymentMethod, PaymentSplit, OrderItem, TABLES, AppUser, hasPermission } from '../types';
 import { 
   DollarSign, ShoppingCart, Lock, Unlock, Plus, Minus, Trash2, 
   QrCode, CreditCard, Banknote, Sparkles, CheckCircle2, 
-  Printer, User, Receipt, Utensils, ChevronDown, ChevronUp, ShieldAlert
+  Printer, User, Receipt, Utensils, ChevronDown, ChevronUp, ShieldAlert,
+  Split, Layers, ArrowRightLeft, AlertCircle, PlusCircle, Check
 } from 'lucide-react';
 
 interface CaixaTabProps {
@@ -19,7 +20,9 @@ interface CaixaTabProps {
     paymentMethod: PaymentMethod,
     extraCartItems: OrderItem[],
     discount: number,
-    includeServiceFee: boolean
+    includeServiceFee: boolean,
+    payments?: PaymentSplit[],
+    totalChange?: number
   ) => void;
   onPrintReceipt: (order: Order) => void;
 }
@@ -52,8 +55,8 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
   // Map open active unpaid orders per table
   const openOrdersByTable = useMemo(() => {
     const map: Record<string, Order[]> = {};
-    orders.forEach((ord) => {
-      if (!ord.isPaid && ord.status !== 'cancelado') {
+    (orders || []).forEach((ord) => {
+      if (ord && !ord.isPaid && ord.status !== 'cancelado') {
         const tbl = ord.tableOrCustomer;
         if (!map[tbl]) {
           map[tbl] = [];
@@ -66,17 +69,17 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
 
   // Active orders for currently selected table
   const currentTableOrders = openOrdersByTable[selectedTable] || [];
-  const currentTableActiveItems = currentTableOrders.flatMap((o) => o.items);
-  const currentTableTotal = currentTableOrders.reduce((sum, o) => sum + o.total, 0);
+  const currentTableActiveItems = currentTableOrders.flatMap((o) => (o && Array.isArray(o.items) ? o.items : []));
+  const currentTableTotal = currentTableOrders.reduce((sum, o) => sum + (o?.total || 0), 0);
 
   // Array of occupied tables with active unpaid consumption
   const occupiedTablesList = useMemo(() => {
     return Object.keys(openOrdersByTable)
       .filter((tbl) => (openOrdersByTable[tbl] || []).length > 0)
       .map((tbl) => {
-        const activeOrds = openOrdersByTable[tbl];
-        const itemCount = activeOrds.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
-        const totalBill = activeOrds.reduce((sum, o) => sum + o.total, 0);
+        const activeOrds = openOrdersByTable[tbl] || [];
+        const itemCount = activeOrds.reduce((sum, o) => sum + (Array.isArray(o?.items) ? o.items : []).reduce((s, i) => s + (i?.quantity || 0), 0), 0);
+        const totalBill = activeOrds.reduce((sum, o) => sum + (o?.total || 0), 0);
         return {
           table: tbl,
           itemCount,
@@ -87,8 +90,16 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<'single' | 'split'>('single');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
   const [amountReceived, setAmountReceived] = useState<number>(0);
+
+  // Split / Multiple payments state (2 or more payment methods)
+  const [splits, setSplits] = useState<PaymentSplit[]>([
+    { method: 'pix', amount: 0 },
+    { method: 'dinheiro', amount: 0, cashReceived: 0, change: 0 },
+  ]);
+  const [activePixSplitIndex, setActivePixSplitIndex] = useState<number | null>(null);
 
   // Cash shift modal state
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
@@ -106,6 +117,149 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
   // Combined Grand Total for currently selected table (Table Accumulated + Cart Total + Service Fee)
   const grandTotalToPay = Math.max(0, currentTableTotal + totalExtraCart + serviceFee);
   const changeDue = Math.max(0, amountReceived - grandTotalToPay);
+
+  // Split payment calculations
+  const totalSplitsAssigned = splits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+  const remainingToAssign = Math.round((grandTotalToPay - totalSplitsAssigned) * 100) / 100;
+  const isSplitFullyCovered = Math.abs(remainingToAssign) <= 0.01;
+  const isSplitOverCovered = remainingToAssign < -0.01;
+  const isSplitUnderCovered = remainingToAssign > 0.01;
+
+  const totalCashChangeDue = paymentMode === 'split'
+    ? splits.reduce((sum, s) => sum + (s.method === 'dinheiro' && s.cashReceived ? Math.max(0, s.cashReceived - s.amount) : 0), 0)
+    : (paymentMethod === 'dinheiro' ? changeDue : 0);
+
+  const openPaymentModal = (targetTotal: number = grandTotalToPay) => {
+    setAmountReceived(targetTotal);
+    // Initialize 2 default splits (50% each)
+    const half = Math.round((targetTotal / 2) * 100) / 100;
+    const remainder = Math.round((targetTotal - half) * 100) / 100;
+    setSplits([
+      { method: 'pix', amount: half },
+      { method: 'dinheiro', amount: remainder, cashReceived: remainder, change: 0 },
+    ]);
+    setActivePixSplitIndex(null);
+    setIsPaymentModalOpen(true);
+  };
+
+  const updateSplit = (index: number, patch: Partial<PaymentSplit>) => {
+    setSplits((prev) =>
+      prev.map((s, i) => {
+        if (i !== index) return s;
+        const updated = { ...s, ...patch };
+        if (updated.method === 'dinheiro' && updated.cashReceived !== undefined) {
+          updated.change = Math.max(0, updated.cashReceived - updated.amount);
+        }
+        return updated;
+      })
+    );
+  };
+
+  // Smart update for split amount: when there are 2 splits, editing one automatically balances the other!
+  const updateSplitAmount = (index: number, newAmount: number) => {
+    const cleanAmount = Math.max(0, isNaN(newAmount) ? 0 : newAmount);
+    setSplits((prev) => {
+      const next = [...prev];
+      if (next.length === 2) {
+        const otherIndex = index === 0 ? 1 : 0;
+        next[index] = {
+          ...next[index],
+          amount: cleanAmount,
+          cashReceived: next[index].method === 'dinheiro' && (!next[index].cashReceived || next[index].cashReceived < cleanAmount)
+            ? cleanAmount
+            : next[index].cashReceived,
+          change: next[index].method === 'dinheiro' && next[index].cashReceived
+            ? Math.max(0, (next[index].cashReceived || 0) - cleanAmount)
+            : 0,
+        };
+        const remainder = Math.max(0, Math.round((grandTotalToPay - cleanAmount) * 100) / 100);
+        next[otherIndex] = {
+          ...next[otherIndex],
+          amount: remainder,
+          cashReceived: next[otherIndex].method === 'dinheiro' && (!next[otherIndex].cashReceived || next[otherIndex].cashReceived < remainder)
+            ? remainder
+            : next[otherIndex].cashReceived,
+          change: next[otherIndex].method === 'dinheiro' && next[otherIndex].cashReceived
+            ? Math.max(0, (next[otherIndex].cashReceived || 0) - remainder)
+            : 0,
+        };
+      } else {
+        next[index] = {
+          ...next[index],
+          amount: cleanAmount,
+          cashReceived: next[index].method === 'dinheiro' && (!next[index].cashReceived || next[index].cashReceived < cleanAmount)
+            ? cleanAmount
+            : next[index].cashReceived,
+          change: next[index].method === 'dinheiro' && next[index].cashReceived
+            ? Math.max(0, (next[index].cashReceived || 0) - cleanAmount)
+            : 0,
+        };
+      }
+      return next;
+    });
+  };
+
+  // Automatically balance the remaining amount into the last split line
+  const autoBalanceRemaining = () => {
+    setSplits((prev) => {
+      if (prev.length === 0) return prev;
+      const otherSum = prev.slice(0, -1).reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const remainder = Math.max(0, Math.round((grandTotalToPay - otherSum) * 100) / 100);
+      const next = [...prev];
+      const lastIdx = next.length - 1;
+      next[lastIdx] = {
+        ...next[lastIdx],
+        amount: remainder,
+        cashReceived: next[lastIdx].method === 'dinheiro' ? Math.max(remainder, next[lastIdx].cashReceived || remainder) : next[lastIdx].cashReceived,
+        change: next[lastIdx].method === 'dinheiro' && next[lastIdx].cashReceived ? Math.max(0, (next[lastIdx].cashReceived || 0) - remainder) : 0,
+      };
+      return next;
+    });
+  };
+
+  const addSplitLine = (method: 'pix' | 'credito' | 'debito' | 'dinheiro' = 'credito') => {
+    const currentSum = splits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+    const left = Math.max(0, Math.round((grandTotalToPay - currentSum) * 100) / 100);
+    setSplits((prev) => [
+      ...prev,
+      { method, amount: left, cashReceived: left, change: 0 },
+    ]);
+  };
+
+  const removeSplitLine = (index: number) => {
+    if (splits.length <= 2) return; // Keep at least 2 lines for split payment
+    setSplits((prev) => {
+      const filtered = prev.filter((_, i) => i !== index);
+      // Rebalance last item
+      if (filtered.length > 0) {
+        const otherSum = filtered.slice(0, -1).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+        const remainder = Math.max(0, Math.round((grandTotalToPay - otherSum) * 100) / 100);
+        filtered[filtered.length - 1].amount = remainder;
+      }
+      return filtered;
+    });
+  };
+
+  const splitEqually = (parts: number) => {
+    const base = Math.floor((grandTotalToPay / parts) * 100) / 100;
+    let distributed = 0;
+    const newSplits: PaymentSplit[] = [];
+    const defaultMethods: ('pix' | 'credito' | 'debito' | 'dinheiro')[] = ['pix', 'dinheiro', 'credito', 'debito'];
+
+    for (let i = 0; i < parts; i++) {
+      const isLast = i === parts - 1;
+      const amt = isLast ? Math.round((grandTotalToPay - distributed) * 100) / 100 : base;
+      distributed += amt;
+      const method = splits[i]?.method || defaultMethods[i % defaultMethods.length];
+      newSplits.push({
+        method,
+        amount: amt,
+        cashReceived: method === 'dinheiro' ? amt : undefined,
+        change: 0,
+      });
+    }
+    setSplits(newSplits);
+  };
 
   const updateQuantity = (cartItemId: string, delta: number) => {
     setCart((prevCart) =>
@@ -135,8 +289,50 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
       return;
     }
 
+    let finalSplitsList = splits;
+    if (paymentMode === 'split') {
+      const sumSplits = splits.reduce((acc, s) => acc + (Number(s.amount) || 0), 0);
+      const diff = Math.round((grandTotalToPay - sumSplits) * 100) / 100;
+      if (Math.abs(diff) > 0.001) {
+        // Automatically balance into the last split item so cashier is never blocked
+        finalSplitsList = [...splits];
+        const lastIdx = finalSplitsList.length - 1;
+        const otherSum = finalSplitsList.slice(0, lastIdx).reduce((acc, s) => acc + (Number(s.amount) || 0), 0);
+        const adjustedAmount = Math.max(0, Math.round((grandTotalToPay - otherSum) * 100) / 100);
+        finalSplitsList[lastIdx] = {
+          ...finalSplitsList[lastIdx],
+          amount: adjustedAmount,
+          cashReceived: finalSplitsList[lastIdx].method === 'dinheiro' 
+            ? Math.max(adjustedAmount, finalSplitsList[lastIdx].cashReceived || adjustedAmount)
+            : finalSplitsList[lastIdx].cashReceived,
+          change: finalSplitsList[lastIdx].method === 'dinheiro' && finalSplitsList[lastIdx].cashReceived
+            ? Math.max(0, (finalSplitsList[lastIdx].cashReceived || 0) - adjustedAmount)
+            : 0,
+        };
+      }
+    }
+
+    const cleanSplits = paymentMode === 'split'
+      ? finalSplitsList
+          .filter((s) => s.amount > 0)
+          .map((s) => ({
+            ...s,
+            change: s.method === 'dinheiro' && s.cashReceived ? Math.max(0, s.cashReceived - s.amount) : 0,
+          }))
+      : undefined;
+
+    const finalMethod: PaymentMethod = paymentMode === 'split' ? 'multiplo' : paymentMethod;
+
     if (onPayTableOrders) {
-      onPayTableOrders(selectedTable, paymentMethod, cart, discount, includeServiceFee);
+      onPayTableOrders(
+        selectedTable, 
+        finalMethod, 
+        cart, 
+        discount, 
+        includeServiceFee,
+        cleanSplits,
+        totalCashChangeDue
+      );
     } else {
       if (cart.length > 0) {
         onCreateOrder({
@@ -147,7 +343,9 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
           discount,
           serviceFee,
           total: grandTotalToPay,
-          paymentMethod,
+          paymentMethod: finalMethod,
+          payments: cleanSplits,
+          change: totalCashChangeDue,
           isPaid: true,
         });
       }
@@ -330,8 +528,7 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
                       type="button"
                       onClick={() => {
                         setSelectedTable(table);
-                        setAmountReceived(totalBill);
-                        setIsPaymentModalOpen(true);
+                        openPaymentModal(totalBill);
                       }}
                       className="flex-1 py-1 px-1.5 rounded-lg text-[11px] font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-all flex items-center justify-center space-x-1 cursor-pointer active:scale-95"
                     >
@@ -728,8 +925,7 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
               <button
                 disabled={currentTableOrders.length === 0 && cart.length === 0}
                 onClick={() => {
-                  setAmountReceived(grandTotalToPay);
-                  setIsPaymentModalOpen(true);
+                  openPaymentModal(grandTotalToPay);
                 }}
                 className={`w-full py-4 px-4 rounded-xl font-black text-sm shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-98 ${
                   currentTableOrders.length > 0 || cart.length > 0
@@ -745,22 +941,26 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
         </div>
       </div>
 
-      {/* MODAL 2: PAYMENT PROCESSING */}
+      {/* MODAL 2: PAYMENT PROCESSING (SUPPORTS SINGLE & MULTIPLE / SPLIT PAYMENTS) */}
       {isPaymentModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6 space-y-5 animate-in fade-in zoom-in duration-150">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in duration-150">
+            {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="font-extrabold text-slate-900 text-lg">
-                  Receber Pagamento
+                <h3 className="font-extrabold text-slate-900 text-lg sm:text-xl flex items-center gap-2">
+                  <span>Receber Pagamento</span>
                 </h3>
                 <p className="text-xs font-bold text-amber-700">
-                  {selectedTable}
+                  {selectedTable} • {currentTableActiveItems.length + cart.length} itens no total
                 </p>
               </div>
-              <span className="font-black text-emerald-600 text-xl">
-                R$ {grandTotalToPay.toFixed(2).replace('.', ',')}
-              </span>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Total a Cobrar</span>
+                <span className="font-black text-emerald-600 text-xl sm:text-2xl">
+                  R$ {grandTotalToPay.toFixed(2).replace('.', ',')}
+                </span>
+              </div>
             </div>
 
             {/* Bill Summary Breakdown inside Payment Modal */}
@@ -771,9 +971,15 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
                   <span>R$ {currentTableTotal.toFixed(2).replace('.', ',')}</span>
                 </div>
               )}
+              {cart.length > 0 && (
+                <div className="flex justify-between text-slate-700 font-bold">
+                  <span>Itens Adicionados no Balcão ({cart.length} itens):</span>
+                  <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                </div>
+              )}
               {includeServiceFee && serviceFee > 0 && (
                 <div className="flex justify-between text-slate-700 font-bold">
-                  <span>Taxa de Serviço (10%):</span>
+                  <span>Taxa de Serviço Opcional (10%):</span>
                   <span>R$ {serviceFee.toFixed(2).replace('.', ',')}</span>
                 </div>
               )}
@@ -783,133 +989,516 @@ export const CaixaTab: React.FC<CaixaTabProps> = ({
                   <span>- R$ {discount.toFixed(2).replace('.', ',')}</span>
                 </div>
               )}
-              <div className="flex justify-between text-slate-900 font-black pt-1 border-t border-slate-200 text-sm">
-                <span>Total a Cobrar:</span>
+              <div className="flex justify-between text-slate-900 font-black pt-1.5 border-t border-slate-200 text-sm">
+                <span>Total Líquido da Comanda:</span>
                 <span className="text-emerald-600">R$ {grandTotalToPay.toFixed(2).replace('.', ',')}</span>
               </div>
             </div>
 
-            {/* Select Payment Method */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setPaymentMethod('pix')}
-                className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
-                  paymentMethod === 'pix'
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <QrCode className="w-4 h-4 text-emerald-600" />
-                <span>Pix Instantâneo</span>
-              </button>
-
-              <button
-                onClick={() => setPaymentMethod('credito')}
-                className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
-                  paymentMethod === 'credito'
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <CreditCard className="w-4 h-4 text-emerald-600" />
-                <span>Cartão de Crédito</span>
-              </button>
-
-              <button
-                onClick={() => setPaymentMethod('debito')}
-                className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
-                  paymentMethod === 'debito'
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <CreditCard className="w-4 h-4 text-emerald-600" />
-                <span>Cartão de Débito</span>
-              </button>
-
-              <button
-                onClick={() => setPaymentMethod('dinheiro')}
-                className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
-                  paymentMethod === 'dinheiro'
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Banknote className="w-4 h-4 text-emerald-600" />
-                <span>Dinheiro / Espécie</span>
-              </button>
+            {/* PAYMENT MODE TOGGLE: FORMA ÚNICA vs DIVIDIR / MÚLTIPLAS FORMAS */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                Como o cliente irá pagar?
+              </label>
+              <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode('single')}
+                  className={`py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                    paymentMode === 'single'
+                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5 text-slate-700" />
+                  <span>Forma Única (100%)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMode('split');
+                    const currentSum = splits.reduce((s, x) => s + (x.amount || 0), 0);
+                    if (Math.abs(currentSum - grandTotalToPay) > 0.01) {
+                      splitEqually(2);
+                    }
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                    paymentMode === 'split'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Split className="w-3.5 h-3.5" />
+                  <span>Dividir em 2+ Opções</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    paymentMode === 'split' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    Múltiplo
+                  </span>
+                </button>
+              </div>
             </div>
 
-            {/* Dynamic details for selected payment method */}
-            {paymentMethod === 'pix' && (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-3">
-                <p className="text-xs font-bold text-slate-700">
-                  Apresente o QR Code do Pix para o cliente:
-                </p>
-                <div className="w-36 h-36 bg-white p-2 border border-slate-300 rounded-xl mx-auto flex items-center justify-center shadow-inner">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=ESPETINHO_DO_CHEFE_PIX_${grandTotalToPay.toFixed(2)}`}
-                    alt="Pix QR Code"
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full"
-                  />
-                </div>
-                <span className="text-[11px] text-emerald-600 font-bold bg-emerald-100 px-2.5 py-1 rounded-full inline-block">
-                  ✓ Aguardando confirmação do banco...
-                </span>
-              </div>
-            )}
+            {/* MODE 1: SINGLE PAYMENT */}
+            {paymentMode === 'single' && (
+              <div className="space-y-4 animate-in fade-in duration-100">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('pix')}
+                    className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+                      paymentMethod === 'pix'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-400 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <QrCode className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>⚡ Pix Instantâneo</span>
+                  </button>
 
-            {paymentMethod === 'dinheiro' && (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Valor Recebido (R$)
-                    </label>
-                    <input
-                      type="number"
-                      step="1"
-                      value={amountReceived}
-                      onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 text-base font-bold border border-slate-300 rounded-xl"
-                    />
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('credito')}
+                    className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+                      paymentMethod === 'credito'
+                        ? 'bg-indigo-50 border-indigo-500 text-indigo-900 ring-2 ring-indigo-400 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>💳 Cartão de Crédito</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('debito')}
+                    className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+                      paymentMethod === 'debito'
+                        ? 'bg-blue-50 border-blue-500 text-blue-900 ring-2 ring-blue-400 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>💳 Cartão de Débito</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('dinheiro');
+                      if (!amountReceived || amountReceived < grandTotalToPay) {
+                        setAmountReceived(grandTotalToPay);
+                      }
+                    }}
+                    className={`p-3 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+                      paymentMethod === 'dinheiro'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-400 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Banknote className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>💵 Dinheiro / Espécie</span>
+                  </button>
+                </div>
+
+                {/* Single Pix View */}
+                {paymentMethod === 'pix' && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-3">
+                    <p className="text-xs font-bold text-slate-700">
+                      Apresente o QR Code do Pix para o cliente escanear:
+                    </p>
+                    <div className="w-36 h-36 bg-white p-2 border border-slate-300 rounded-xl mx-auto flex items-center justify-center shadow-inner">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MARESIA_PIX_${grandTotalToPay.toFixed(2)}`}
+                        alt="Pix QR Code"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full"
+                      />
+                    </div>
+                    <span className="text-[11px] text-emerald-600 font-bold bg-emerald-100 px-2.5 py-1 rounded-full inline-block">
+                      ✓ QR Code gerado para R$ {grandTotalToPay.toFixed(2).replace('.', ',')}
+                    </span>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Troco a Devolver
-                    </label>
-                    <div className="px-3 py-2 text-base font-black text-rose-600 bg-white border border-slate-200 rounded-xl">
-                      R$ {changeDue.toFixed(2).replace('.', ',')}
+                )}
+
+                {/* Single Cash View with Quick Bills */}
+                {paymentMethod === 'dinheiro' && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700">
+                        Valor Recebido pelo Cliente:
+                      </label>
+                      <div className="flex gap-1">
+                        {[
+                          { label: 'Exato', val: grandTotalToPay },
+                          { label: 'R$ 20', val: 20 },
+                          { label: 'R$ 50', val: 50 },
+                          { label: 'R$ 100', val: 100 },
+                          { label: 'R$ 200', val: 200 },
+                        ]
+                          .filter((b) => b.label === 'Exato' || b.val >= grandTotalToPay || grandTotalToPay <= 200)
+                          .slice(0, 5)
+                          .map((b, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setAmountReceived(b.val)}
+                              className="px-2 py-0.5 bg-white hover:bg-slate-200 text-slate-800 font-bold text-[10px] border border-slate-300 rounded-md shadow-2xs transition-all cursor-pointer"
+                            >
+                              {b.label}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">R$</span>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            value={amountReceived || ''}
+                            onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
+                            className="w-full pl-9 pr-3 py-2 text-base font-black border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            placeholder="0,00"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="px-3 py-2 text-base font-black text-rose-600 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-500">Troco:</span>
+                          <span>R$ {changeDue.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
+
+                {/* Single Card View */}
+                {(paymentMethod === 'credito' || paymentMethod === 'debito') && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-2">
+                    <p className="text-xs font-bold text-slate-700">
+                      Insira ou aproxime o cartão na maquininha.
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Transação no valor de <strong className="text-slate-800">R$ {grandTotalToPay.toFixed(2).replace('.', ',')}</strong> via {paymentMethod === 'credito' ? 'CRÉDITO' : 'DÉBITO'}.
+                    </p>
+                  </div>
+                )}
+
+                {/* Quick Split Prompt Shortcut */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMode('split');
+                    splitEqually(2);
+                  }}
+                  className="w-full p-2.5 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/60 hover:bg-emerald-100 text-emerald-800 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Split className="w-4 h-4 text-emerald-600" />
+                  <span>Cliente quer pagar com 2 formas (ex: metade Pix e metade Cartão)? Clique aqui</span>
+                </button>
+              </div>
+            )}
+
+            {/* MODE 2: MULTIPLE / SPLIT PAYMENTS (2 OU MAIS FORMAS) - ULTRA SIMPLIFIED */}
+            {paymentMode === 'split' && (
+              <div className="space-y-3 animate-in fade-in duration-100">
+                {/* 1-Click Fast Split Shortcuts */}
+                <div className="flex flex-wrap items-center justify-between gap-1.5 p-2 bg-emerald-50/60 border border-emerald-200 rounded-xl text-[11px]">
+                  <span className="font-extrabold text-emerald-900 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Divisão Rápida em 1 Clique:</span>
+                  </span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => splitEqually(2)}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-100 text-emerald-900 font-extrabold border border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95"
+                    >
+                      👥 Meio a Meio (2x)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => splitEqually(3)}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-100 text-emerald-900 font-extrabold border border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95"
+                    >
+                      3 Partes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => splitEqually(4)}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-100 text-emerald-900 font-extrabold border border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95"
+                    >
+                      4 Partes
+                    </button>
+                  </div>
+                </div>
+
+                {/* List of Split Payment Lines */}
+                <div className="space-y-2.5">
+                  {splits.map((split, index) => {
+                    const isCash = split.method === 'dinheiro';
+                    const isPix = split.method === 'pix';
+                    const isShowingPixQr = activePixSplitIndex === index;
+
+                    return (
+                      <div 
+                        key={index} 
+                        className="bg-white border-2 border-slate-200 hover:border-slate-300 rounded-2xl p-3.5 space-y-2.5 shadow-2xs transition-all"
+                      >
+                        {/* Header for this split row */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center font-mono font-bold">
+                              {index + 1}
+                            </span>
+                            <span>{index === 0 ? '1ª Opção de Pagamento' : index === 1 ? '2ª Opção de Pagamento' : `${index + 1}ª Opção`}</span>
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                              R$ {(split.amount || 0).toFixed(2).replace('.', ',')}
+                            </span>
+
+                            {isPix && split.amount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setActivePixSplitIndex(isShowingPixQr ? null : index)}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 transition-all cursor-pointer ${
+                                  isShowingPixQr 
+                                    ? 'bg-emerald-600 text-white border-emerald-600' 
+                                    : 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
+                                }`}
+                              >
+                                <QrCode className="w-3 h-3" />
+                                <span>{isShowingPixQr ? 'Ocultar QR' : 'Ver QR Pix'}</span>
+                              </button>
+                            )}
+
+                            {splits.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => removeSplitLine(index)}
+                                className="text-slate-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                                title="Remover esta forma"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Select method buttons for this line (Colored and clear) */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { id: 'pix', label: 'Pix', icon: QrCode, activeColor: 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-400' },
+                            { id: 'dinheiro', label: 'Dinheiro', icon: Banknote, activeColor: 'bg-amber-600 text-white border-amber-600 ring-2 ring-amber-400' },
+                            { id: 'debito', label: 'Débito', icon: CreditCard, activeColor: 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-400' },
+                            { id: 'credito', label: 'Crédito', icon: CreditCard, activeColor: 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-400' },
+                          ].map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                updateSplit(index, { 
+                                  method: m.id as any,
+                                  cashReceived: m.id === 'dinheiro' ? split.amount : undefined 
+                                });
+                                if (m.id !== 'pix' && activePixSplitIndex === index) {
+                                  setActivePixSplitIndex(null);
+                                }
+                              }}
+                              className={`py-2 px-1 rounded-xl border text-xs font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                                split.method === m.id
+                                  ? `${m.activeColor} shadow-xs`
+                                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              <m.icon className="w-3.5 h-3.5 shrink-0" />
+                              <span>{m.label}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Value Input (With Auto-Balance Note) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-slate-700">
+                              Valor a pagar nesta opção:
+                            </label>
+                            {splits.length === 2 && (
+                              <span className="text-[10px] text-emerald-700 font-extrabold">
+                                ⚡ Ajusta a outra opção automaticamente
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={split.amount || ''}
+                              onChange={(e) => updateSplitAmount(index, parseFloat(e.target.value) || 0)}
+                              className="w-full pl-9 pr-3 py-2 text-base font-black border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                              placeholder="0,00"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Cash specific: Received & Change */}
+                        {isCash && (
+                          <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-2.5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-amber-900">
+                                Dinheiro entregue pelo cliente:
+                              </span>
+                              <div className="flex gap-1">
+                                {[
+                                  { label: 'Exato', val: split.amount },
+                                  { label: '+R$ 10', val: (split.amount || 0) + 10 },
+                                  { label: '+R$ 20', val: (split.amount || 0) + 20 },
+                                  { label: '+R$ 50', val: (split.amount || 0) + 50 },
+                                ].map((chip, cIdx) => (
+                                  <button
+                                    key={cIdx}
+                                    type="button"
+                                    onClick={() => updateSplit(index, { cashReceived: chip.val })}
+                                    className="px-1.5 py-0.5 bg-white text-slate-700 hover:bg-amber-100 font-bold text-[10px] border border-amber-300 rounded transition-all cursor-pointer"
+                                  >
+                                    {chip.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={split.cashReceived !== undefined ? split.cashReceived : ''}
+                                  onChange={(e) => updateSplit(index, { cashReceived: parseFloat(e.target.value) || 0 })}
+                                  className="w-full pl-8 pr-2 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  placeholder="Ex: 50"
+                                />
+                              </div>
+
+                              <div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg flex items-center justify-between text-xs font-bold">
+                                <span className="text-slate-600">Troco:</span>
+                                <span className="text-sm font-black text-rose-600">
+                                  R$ {Math.max(0, (split.cashReceived || 0) - split.amount).toFixed(2).replace('.', ',')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Dynamic Pix QR Preview for this specific split */}
+                        {isShowingPixQr && isPix && split.amount > 0 && (
+                          <div className="p-3 bg-white border border-emerald-300 rounded-xl text-center space-y-2 shadow-inner">
+                            <p className="text-[11px] font-bold text-emerald-900">
+                              QR Code Pix para esta fração (R$ {split.amount.toFixed(2).replace('.', ',')}):
+                            </p>
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=MARESIA_PIX_SPLIT_${split.amount.toFixed(2)}`}
+                              alt="Pix Split QR Code"
+                              referrerPolicy="no-referrer"
+                              className="w-28 h-28 mx-auto border border-slate-200 rounded-lg p-1 bg-white"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add Another Payment Method Button (3+, 4+, etc.) */}
+                <button
+                  type="button"
+                  onClick={() => addSplitLine()}
+                  className="w-full py-2.5 border-2 border-dashed border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50 text-emerald-800 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4 text-emerald-600" />
+                  <span>+ Adicionar 3ª Opção de Pagamento (ou mais)</span>
+                </button>
+
+                {/* Live Distribution Status Card */}
+                <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 transition-all ${
+                  isSplitFullyCovered
+                    ? 'bg-emerald-50/90 border-emerald-300 text-emerald-900'
+                    : 'bg-amber-50 border-amber-300 text-amber-900'
+                }`}>
+                  <div className="flex justify-between font-bold">
+                    <span>Total da Conta:</span>
+                    <span>R$ {grandTotalToPay.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>Distribuído ({(splits || []).filter((s) => s && s.amount > 0).length} opções):</span>
+                    <span className="font-mono font-black">R$ {totalSplitsAssigned.toFixed(2).replace('.', ',')}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between font-black pt-1.5 border-t border-current/20 text-sm">
+                    <span className="flex items-center gap-1">
+                      {isSplitFullyCovered ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>Conta 100% Equilibrada e Pronta!</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-4 h-4 text-amber-600" />
+                          <span>Diferença: R$ {Math.abs(remainingToAssign).toFixed(2).replace('.', ',')}</span>
+                        </>
+                      )}
+                    </span>
+
+                    {!isSplitFullyCovered && (
+                      <button
+                        type="button"
+                        onClick={autoBalanceRemaining}
+                        className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-black transition-all cursor-pointer active:scale-95 shadow-xs"
+                      >
+                        ⚡ Ajustar Restante Agora
+                      </button>
+                    )}
+                  </div>
+
+                  {totalCashChangeDue > 0 && (
+                    <div className="flex justify-between font-black text-rose-600 pt-1 border-t border-current/20">
+                      <span>Troco Total em Dinheiro a Devolver:</span>
+                      <span className="text-sm font-black">R$ {totalCashChangeDue.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {(paymentMethod === 'credito' || paymentMethod === 'debito') && (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-2">
-                <p className="text-xs font-bold text-slate-700">
-                  Aproxime ou insira o cartão na maquininha.
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  Transação pré-autorizada no valor de R$ {grandTotalToPay.toFixed(2).replace('.', ',')}
-                </p>
-              </div>
-            )}
-
-            <div className="flex items-center space-x-3 pt-2">
+            {/* Bottom Modal Actions */}
+            <div className="flex items-center space-x-3 pt-3 border-t border-slate-100">
               <button
+                type="button"
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
                 Voltar
               </button>
               <button
+                type="button"
                 onClick={handleFinalizeOrder}
-                className="flex-1 py-2.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md cursor-pointer"
+                className="flex-2 py-3 text-xs sm:text-sm font-black rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 active:scale-98"
               >
-                Confirmar Pagamento & Liberar Mesa
+                <Check className="w-4 h-4" />
+                <span>
+                  {paymentMode === 'split'
+                    ? `Confirmar Pagamento Dividido (${(splits || []).filter((s) => s && s.amount > 0).length} opções) & Liberar`
+                    : 'Confirmar Pagamento & Liberar Mesa'}
+                </span>
               </button>
             </div>
           </div>

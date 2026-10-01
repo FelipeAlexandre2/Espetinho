@@ -1,4 +1,4 @@
-import { Product, StockItem, Order, CashShift, AppUser, SystemLog, DEFAULT_ROLE_PERMISSIONS, MarmitaOption, MarmitaSizeConfig, MarmitaOrder, MarmitaSettings, SystemModule, SystemPermission } from '../types';
+import { Product, StockItem, Order, CashShift, AppUser, SystemLog, DEFAULT_ROLE_PERMISSIONS, MarmitaOption, MarmitaSizeConfig, MarmitaOrder, MarmitaSettings, SystemModule, SystemPermission, UserRole } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_STOCK, INITIAL_ORDERS, INITIAL_CASH_SHIFT, INITIAL_USERS, INITIAL_LOGS } from '../data/mockData';
 import { INITIAL_MARMITA_OPTIONS, INITIAL_MARMITA_SIZES, INITIAL_MARMITA_ORDERS, INITIAL_MARMITA_SETTINGS } from '../data/marmitariaData';
 
@@ -58,7 +58,9 @@ export function saveProducts(products: Product[]): void {
 export function loadStock(): StockItem[] {
   try {
     const data = localStorage.getItem(KEYS.STOCK);
-    return data ? JSON.parse(data) : INITIAL_STOCK;
+    if (!data) return INITIAL_STOCK;
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_STOCK;
   } catch {
     return INITIAL_STOCK;
   }
@@ -75,7 +77,14 @@ export function saveStock(stock: StockItem[]): void {
 export function loadOrders(): Order[] {
   try {
     const data = localStorage.getItem(KEYS.ORDERS);
-    return data ? JSON.parse(data) : INITIAL_ORDERS;
+    if (!data) return INITIAL_ORDERS;
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return INITIAL_ORDERS;
+    return parsed.map((o) => ({
+      ...o,
+      items: Array.isArray(o.items) ? o.items : [],
+      payments: Array.isArray(o.payments) ? o.payments : [],
+    }));
   } catch {
     return INITIAL_ORDERS;
   }
@@ -133,17 +142,15 @@ export function loadUsers(): AppUser[] {
     // Backfill any missing passwords, pins or permissions from INITIAL_USERS / DEFAULT_ROLE_PERMISSIONS
     return parsed.map((user) => {
       const match = INITIAL_USERS.find((u) => u.id === user.id);
-      const defaultPerms = DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.garcom;
-      const mergedPerms = {
-        ...defaultPerms,
-        ...(user.permissions || {}),
-      };
-
-      if (user.role === 'admin') {
-        (Object.keys(DEFAULT_ROLE_PERMISSIONS.admin) as SystemPermission[]).forEach((k) => {
-          mergedPerms[k] = true;
-        });
+      let userPerms: any = user.permissions;
+      if (typeof userPerms === 'string') {
+        try { userPerms = JSON.parse(userPerms); } catch { userPerms = {}; }
       }
+      const defaultPerms = DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.garcom;
+      const mergedPerms: Record<SystemPermission, boolean> = {
+        ...defaultPerms,
+        ...(userPerms && typeof userPerms === 'object' ? userPerms : {}),
+      };
 
       if (match) {
         return {
@@ -213,17 +220,15 @@ export function loadCurrentUser(): AppUser {
     const data = localStorage.getItem(KEYS.CURRENT_USER);
     if (data) {
       const parsed: AppUser = JSON.parse(data);
-      const defaultPerms = DEFAULT_ROLE_PERMISSIONS[parsed.role] || DEFAULT_ROLE_PERMISSIONS.garcom;
-      const mergedPerms = {
-        ...defaultPerms,
-        ...(parsed.permissions || {}),
-      };
-
-      if (parsed.role === 'admin') {
-        (Object.keys(DEFAULT_ROLE_PERMISSIONS.admin) as SystemPermission[]).forEach((k) => {
-          mergedPerms[k] = true;
-        });
+      let userPerms: any = parsed.permissions;
+      if (typeof userPerms === 'string') {
+        try { userPerms = JSON.parse(userPerms); } catch { userPerms = {}; }
       }
+      const defaultPerms = DEFAULT_ROLE_PERMISSIONS[parsed.role] || DEFAULT_ROLE_PERMISSIONS.garcom;
+      const mergedPerms: Record<SystemPermission, boolean> = {
+        ...defaultPerms,
+        ...(userPerms && typeof userPerms === 'object' ? userPerms : {}),
+      };
 
       return {
         ...parsed,
@@ -292,9 +297,23 @@ export function loadMarmitaOrders(): MarmitaOrder[] {
   try {
     const data = localStorage.getItem(KEYS.MARMITA_ORDERS);
     if (!data) return INITIAL_MARMITA_ORDERS;
-    const parsed: MarmitaOrder[] = JSON.parse(data);
+    const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return INITIAL_MARMITA_ORDERS;
-    return parsed;
+    return parsed.map((o) => ({
+      ...o,
+      items: Array.isArray(o.items)
+        ? o.items.map((it: any) => ({
+            ...it,
+            proteinas: Array.isArray(it.proteinas) ? it.proteinas : [],
+            bases: Array.isArray(it.bases) ? it.bases : [],
+            feijoes: Array.isArray(it.feijoes) ? it.feijoes : [],
+            guarnicoes: Array.isArray(it.guarnicoes) ? it.guarnicoes : [],
+            saladas: Array.isArray(it.saladas) ? it.saladas : [],
+            adicionais: Array.isArray(it.adicionais) ? it.adicionais : [],
+          }))
+        : [],
+      beverages: Array.isArray(o.beverages) ? o.beverages : [],
+    }));
   } catch {
     return INITIAL_MARMITA_ORDERS;
   }
@@ -475,8 +494,23 @@ export async function fetchUsersFromApi(): Promise<AppUser[] | null> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        saveUsers(data);
-        return data;
+        const sanitizedUsers: AppUser[] = data.map((u: any) => {
+          let perms = u.permissions;
+          if (typeof perms === 'string') {
+            try { perms = JSON.parse(perms); } catch { perms = {}; }
+          }
+          const defaultPerms = DEFAULT_ROLE_PERMISSIONS[u.role as UserRole] || DEFAULT_ROLE_PERMISSIONS.garcom;
+          const mergedPerms: Record<SystemPermission, boolean> = {
+            ...defaultPerms,
+            ...(perms && typeof perms === 'object' ? perms : {}),
+          };
+          return {
+            ...u,
+            permissions: mergedPerms,
+          };
+        });
+        saveUsers(sanitizedUsers);
+        return sanitizedUsers;
       }
     }
   } catch (e) {
@@ -531,8 +565,8 @@ export function loadAuditLogs(): SystemLog[] {
   try {
     const data = localStorage.getItem(KEYS.LOGS);
     if (!data) return INITIAL_LOGS;
-    const parsed: SystemLog[] = JSON.parse(data);
-    return parsed.length > 0 ? parsed : INITIAL_LOGS;
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_LOGS;
   } catch {
     return INITIAL_LOGS;
   }

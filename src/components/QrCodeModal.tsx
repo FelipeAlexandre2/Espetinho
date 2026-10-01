@@ -275,25 +275,25 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
                 </div>
 
                 {/* Step Instructions */}
-                <div className="w-full my-2 space-y-1 text-slate-700 text-left text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                  <div className="flex items-center gap-2 font-bold">
-                    <span className="w-4 h-4 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center font-black">1</span>
+                <div className="w-full my-2 space-y-1.5 text-black text-left text-xs bg-slate-100 p-3 rounded-xl border border-slate-300">
+                  <div className="flex items-center gap-2 font-black">
+                    <span className="w-5 h-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center font-black shrink-0">1</span>
                     <span>Aponte a câmera do seu celular</span>
                   </div>
-                  <div className="flex items-center gap-2 font-bold">
-                    <span className="w-4 h-4 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center font-black">2</span>
+                  <div className="flex items-center gap-2 font-black">
+                    <span className="w-5 h-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center font-black shrink-0">2</span>
                     <span>Escolha espetos, porções e bebidas</span>
                   </div>
-                  <div className="flex items-center gap-2 font-bold">
-                    <span className="w-4 h-4 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center font-black">3</span>
+                  <div className="flex items-center gap-2 font-black">
+                    <span className="w-5 h-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center font-black shrink-0">3</span>
                     <span>O pedido vai direto para a churrasqueira!</span>
                   </div>
                 </div>
 
                 {/* Wi-Fi Footer Info */}
                 {(wifiName || wifiPass) && (
-                  <div className="w-full pt-2 border-t border-slate-200 flex items-center justify-center gap-2 text-[10px] text-slate-600 font-semibold">
-                    <Wifi className="w-3.5 h-3.5 text-slate-500" />
+                  <div className="w-full pt-2 border-t-2 border-black flex items-center justify-center gap-2 text-xs text-black font-black">
+                    <Wifi className="w-4 h-4 text-black" />
                     <span>Wi-Fi: <strong>{wifiName}</strong></span>
                     <span>•</span>
                     <span>Senha: <strong>{wifiPass}</strong></span>
@@ -420,14 +420,14 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
                   ) : null}
                 </div>
 
-                <div className="w-full text-slate-800 text-left text-[11px] bg-slate-100 p-2 rounded-lg space-y-0.5">
-                  <p className="font-bold">1. Aponte a câmera do seu celular</p>
-                  <p className="font-bold">2. Escolha seus espetos e bebidas</p>
-                  <p className="font-bold">3. O pedido vai direto para a churrasqueira!</p>
+                <div className="w-full text-black text-left text-xs bg-slate-100 p-2.5 rounded-lg space-y-1 border border-slate-400">
+                  <p className="font-black">1. Aponte a câmera do seu celular</p>
+                  <p className="font-black">2. Escolha seus espetos e bebidas</p>
+                  <p className="font-black">3. O pedido vai direto para a churrasqueira!</p>
                 </div>
 
                 {(wifiName || wifiPass) && (
-                  <div className="w-full pt-2 text-[10px] text-slate-700 font-semibold border-t border-slate-200 mt-2">
+                  <div className="w-full pt-2 text-xs text-black font-black border-t-2 border-black mt-2">
                     Wi-Fi: <strong>{wifiName}</strong> • Senha: <strong>{wifiPass}</strong>
                   </div>
                 )}

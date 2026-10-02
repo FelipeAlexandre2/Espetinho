@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Order, StockItem, OrderStatus, MeatPoint, Product, PaymentMethod, OrderItem, AppUser, hasPermission, canUserCreateOrder } from '../types';
+import { Order, StockItem, OrderStatus, MeatPoint, Product, PaymentMethod, OrderItem, AppUser, hasPermission, canUserCreateOrder, TABLES } from '../types';
 import { INITIAL_PRODUCTS } from '../data/mockData';
 import { 
   ClipboardList, Package, Search, Filter, Printer, CheckCircle2, 
@@ -1430,13 +1430,13 @@ export const PedidosEstoqueTab: React.FC<PedidosEstoqueTabProps> = ({
                     required
                   />
                   {/* Quick table chips */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                    {['Mesa 01', 'Mesa 02', 'Mesa 03', 'Mesa 04', 'Mesa 05', 'Balcão', 'Delivery'].map((chip) => (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 text-xs scrollbar-thin">
+                    {TABLES.map((chip) => (
                       <button
                         key={chip}
                         type="button"
                         onClick={() => setNewOrderTable(chip)}
-                        className={`px-2.5 py-1 rounded-md font-bold whitespace-nowrap transition-all text-[11px] ${
+                        className={`px-2.5 py-1 rounded-md font-bold whitespace-nowrap transition-all text-[11px] cursor-pointer ${
                           newOrderTable === chip
                             ? 'bg-red-500 text-white shadow-xs'
                             : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'

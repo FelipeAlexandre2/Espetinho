@@ -257,7 +257,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-extrabold text-sm sm:text-base text-white tracking-tight">
-                  MARESIA ESPETINHO E BATATA
+                  MARESIA
                 </h1>
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-ping" />
@@ -265,7 +265,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium">
-                (67) 99125-6083 • @maresia_espetos_e_batatas
+                (67) 99125-6083 • @maresia
               </p>
             </div>
           </div>
@@ -959,10 +959,10 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
       {/* Footer Navigation / Staff Link */}
       <footer className="mt-auto pt-8 pb-4 text-center border-t border-slate-800/60 max-w-2xl mx-auto w-full px-4 text-slate-500 text-xs">
         <p className="font-semibold text-slate-300">
-          Maresia Espetinho e Batata • Cardápio Digital Interativo
+          Maresia • Cardápio Digital Interativo
         </p>
         <p className="text-[11px] mt-1 text-slate-400">
-          Horário: 18:00 às 23:00 • WhatsApp: (67) 99125-6083 • @maresia_espetos_e_batatas
+          Horário: 18:00 às 23:00 • WhatsApp: (67) 99125-6083 • @maresia
         </p>
 
         {onExitCustomerMode && (

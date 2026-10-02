@@ -24,7 +24,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
   const [wifiName, setWifiName] = useState<string>('Maresia-Clientes');
   const [wifiPass, setWifiPass] = useState<string>('maresia123');
-  const [restaurantName, setRestaurantName] = useState<string>('MARESIA ESPETINHO E BATATA');
+  const [restaurantName, setRestaurantName] = useState<string>('MARESIA');
 
   // Build the target URL for a table
   const getTableUrl = (tableName: string) => {

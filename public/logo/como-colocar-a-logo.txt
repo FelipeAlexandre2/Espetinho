@@ -1,0 +1,18 @@
+=====================================================
+COMO COLOCAR A FOTO / LOGO DO CLIENTE NESTA PASTA
+=====================================================
+
+1. Renomeie o arquivo da sua logo para:
+   logo.png
+
+2. Coloque o arquivo nesta mesma pasta:
+   public/logo/logo.png
+
+3. Pronto! O sistema reconhece automaticamente o arquivo logo.png
+   e exibe na tela de login, cabeçalho e pedidos.
+
+Formatos aceitos:
+- logo.png (Recomendado)
+- logo.jpg
+- logo.svg
+- logo.webp

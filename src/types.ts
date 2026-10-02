@@ -89,12 +89,12 @@ export type ReceiptPaperWidth = '80mm' | '58mm' | 'a4';
 export type ReceiptType = 'cliente' | 'cozinha' | 'pre_conta';
 
 export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
-  restaurantName: 'MARESIA ESPETINHO E BATATA',
-  subtitle: 'Espetos, Batatas Recheadas, Pastéis & Porções',
+  restaurantName: 'MARESIA',
+  subtitle: 'Espetinhos, Bebidas & Porções',
   cnpj: '12.345.678/0001-90',
   address: 'Horário: 18:00 - 23:00',
   phone: '(67) 99125-6083',
-  footerMessage: 'Instagram: @maresia_espetos_e_batatas • Volte sempre! 🔥',
+  footerMessage: 'Instagram: @maresia • Volte sempre! 🔥',
   autoCut: true,
 };
 

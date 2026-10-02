@@ -23,6 +23,8 @@ interface NavbarProps {
   onSelectModule?: (module: SystemModule) => void;
   marmitaOrdersCount?: number;
   onOpenModuleSelectModal?: () => void;
+  logo?: string;
+  onOpenLogoModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -41,6 +43,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectModule,
   marmitaOrdersCount = 0,
   onOpenModuleSelectModal,
+  logo,
+  onOpenLogoModal,
 }) => {
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -115,10 +119,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo & Brand */}
           <div className="flex items-center space-x-2.5 sm:space-x-3">
-            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-lg shrink-0 transition-colors ${
-              currentModule === 'marmitaria' ? 'bg-orange-500 shadow-orange-500/20' : 'bg-red-500 shadow-red-500/20'
-            }`}>
-              {currentModule === 'marmitaria' ? (
+            <div 
+              onClick={onOpenLogoModal}
+              className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shrink-0 cursor-pointer border border-slate-700 bg-[#1e2749] flex items-center justify-center transition-transform hover:scale-105"
+              title="Clique para trocar a logo do Maresia"
+            >
+              {logo ? (
+                <img src={logo} alt="Maresia Logo" className="w-full h-full object-cover" />
+              ) : currentModule === 'marmitaria' ? (
                 <ChefHat className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               ) : (
                 <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-white fill-white/20 animate-pulse" />

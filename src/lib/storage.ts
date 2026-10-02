@@ -17,7 +17,50 @@ const KEYS = {
   MARMITA_ORDERS: 'espetinho_marmita_orders_v1',
   MARMITA_SETTINGS: 'espetinho_marmita_settings_v1',
   ACTIVE_MODULE: 'espetinho_active_module_v1',
+  LOGO: 'maresia_logo_v1',
 };
+
+export const DEFAULT_MARESIA_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#eab308"/>
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="96" fill="url(#bg)" stroke="#f97316" stroke-width="4"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <!-- Waves & Flame -->
+  <path d="M60 115 C75 105, 85 125, 100 115 C115 105, 125 125, 140 115" fill="none" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M70 125 C82 118, 90 130, 100 125 C110 118, 118 130, 130 125" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M100 55 C92 70, 85 80, 88 92 C90 100, 96 104, 100 104 C104 104, 110 100, 112 92 C115 80, 108 70, 100 55 Z" fill="url(#accent)"/>
+  <path d="M100 75 C97 82, 95 88, 97 94 C98 97, 100 99, 101 99 C102 99, 104 97, 105 94 C107 88, 103 82, 100 75 Z" fill="#ffffff"/>
+  <!-- Text -->
+  <text x="100" y="152" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="20" fill="#ffffff" letter-spacing="3">MARESIA</text>
+  <text x="100" y="167" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="7.5" fill="#f97316" letter-spacing="2">GASTRONOMIA</text>
+</svg>
+`)}`;
+
+export function loadMaresiaLogo(): string {
+  try {
+    const saved = localStorage.getItem(KEYS.LOGO);
+    return saved || DEFAULT_MARESIA_LOGO;
+  } catch {
+    return DEFAULT_MARESIA_LOGO;
+  }
+}
+
+export function saveMaresiaLogo(logo: string): void {
+  try {
+    localStorage.setItem(KEYS.LOGO, logo);
+  } catch (e) {
+    console.error('Error saving logo:', e);
+  }
+}
 
 export function loadProducts(): Product[] {
   try {

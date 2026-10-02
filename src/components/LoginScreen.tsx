@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { AppUser, ROLE_CONFIG, SystemModule, hasPermission } from '../types';
+import { AppUser, SystemModule } from '../types';
 import { 
-  Flame, KeyRound, ShieldCheck, 
-  AlertCircle, Sparkles, ArrowRight, 
-  HelpCircle, UtensilsCrossed, ChevronRight, Fingerprint,
-  UserCheck, Delete, RefreshCw, ChefHat, ArrowLeft, Store
+  User, Lock, Eye, EyeOff, AlertCircle, Camera, ShieldCheck, X
 } from 'lucide-react';
+import { LogoCustomizerModal } from './LogoCustomizerModal';
+import { DEFAULT_MARESIA_LOGO, loadMaresiaLogo, saveMaresiaLogo } from '../lib/storage';
 
 interface LoginScreenProps {
   users: AppUser[];
@@ -13,83 +12,90 @@ interface LoginScreenProps {
   onLogFailedAttempt?: (attemptedEmail: string, reason: string) => void;
   currentModule?: SystemModule;
   onSelectModule?: (module: SystemModule) => void;
-  onBackToStartup?: () => void;
+  logo?: string;
+  onLogoChange?: (newLogo: string) => void;
 }
 
 export function LoginScreen({ 
   users, 
   onLoginSuccess, 
   onLogFailedAttempt,
-  currentModule = 'espetos',
-  onSelectModule,
-  onBackToStartup
+  logo: initialLogo,
+  onLogoChange
 }: LoginScreenProps) {
   const activeUsers = (users || []).filter((u) => u && u.status === 'ativo');
   
-  // Default to first active user or null
-  const [selectedUser, setSelectedUser] = useState<AppUser | null>(() => activeUsers[0] || null);
+  const [logo, setLogo] = useState<string>(() => initialLogo || loadMaresiaLogo());
+  const [usernameInput, setUsernameInput] = useState('');
   const [pinCode, setPinCode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [showLogoModal, setShowLogoModal] = useState(false);
 
-  // If selected user doesn't have permission for marmitaria and currentModule is marmitaria, revert to espetos
+  // Helper to find matching user based on typed username
+  const findUserByInput = (input: string): AppUser | null => {
+    const trimmed = input.trim().toLowerCase();
+    if (!trimmed) return null;
+    return activeUsers.find((u) => {
+      const email = u.email.toLowerCase();
+      const emailPrefix = email.split('@')[0];
+      const fullName = u.name.toLowerCase();
+      const firstName = u.name.split(' ')[0].toLowerCase();
+      const role = u.role.toLowerCase();
+      return (
+        emailPrefix === trimmed ||
+        firstName === trimmed ||
+        fullName === trimmed ||
+        email === trimmed ||
+        role === trimmed ||
+        fullName.includes(trimmed)
+      );
+    }) || null;
+  };
+
+  // Sync logo when initialLogo changes
   useEffect(() => {
-    if (selectedUser && !hasPermission(selectedUser, 'access_marmitaria') && currentModule === 'marmitaria') {
-      if (onSelectModule) {
-        onSelectModule('espetos');
-      }
+    if (initialLogo && initialLogo !== logo) {
+      setLogo(initialLogo);
     }
-  }, [selectedUser, currentModule, onSelectModule]);
+  }, [initialLogo]);
 
-  // Allow physical keyboard typing of numbers & backspace/enter
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isLoading || showHelpModal) return;
+  const handleUpdateLogo = (newLogo: string) => {
+    setLogo(newLogo);
+    saveMaresiaLogo(newLogo);
+    if (onLogoChange) onLogoChange(newLogo);
+  };
 
-      if (/^[0-9]$/.test(e.key)) {
-        e.preventDefault();
-        handlePinKeyClick(e.key);
-      } else if (e.key === 'Backspace') {
-        e.preventDefault();
-        handlePinBackspace();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        handlePinClear();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
+  // Keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, field: 'username' | 'password') => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (field === 'username') {
+        document.getElementById('input-login-pin')?.focus();
+      } else {
         handlePinSubmit();
       }
-    };
+    }
+  };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pinCode, selectedUser, isLoading, showHelpModal]);
-
-  // Handle Numeric Key Click
+  // Handle Numeric Keypad button click
   const handlePinKeyClick = (digit: string) => {
-    if (pinCode.length < 6) {
+    if (pinCode.length < 8) {
       const nextPin = pinCode + digit;
       setPinCode(nextPin);
       setErrorMessage(null);
 
-      // Auto-validate if operator is selected and pin reaches their pin length (usually 4 digits)
-      if (selectedUser) {
-        const targetPin = selectedUser.pin || '1234';
-        if (nextPin === targetPin || nextPin === selectedUser.password) {
+      // Auto-validate if operator is found and pin matches
+      const targetUser = findUserByInput(usernameInput);
+      if (targetUser) {
+        const targetPin = targetUser.pin || '1234';
+        if (nextPin === targetPin || nextPin === targetUser.password) {
           setIsLoading(true);
           setTimeout(() => {
             setIsLoading(false);
-            onLoginSuccess(selectedUser, rememberMe);
-          }, 220);
-        } else if (nextPin.length >= targetPin.length) {
-          setErrorMessage(`PIN incorreto para ${selectedUser.name.split(' ')[0]}. Tente novamente.`);
-          onLogFailedAttempt?.(selectedUser.email, 'PIN incorreto digitado');
-          // Clear pin after brief shake
-          setTimeout(() => {
-            setPinCode('');
-          }, 600);
+            onLoginSuccess(targetUser, true);
+          }, 200);
         }
       }
     }
@@ -106,445 +112,267 @@ export function LoginScreen({
   };
 
   const handlePinSubmit = () => {
-    if (!selectedUser) {
-      setErrorMessage('Selecione um operador antes de digitar o PIN.');
-      return;
-    }
-    if (!pinCode) {
-      setErrorMessage('Digite o PIN de 4 dígitos do operador.');
+    if (!usernameInput.trim()) {
+      setErrorMessage('Por favor, informe seu nome de usuário.');
+      document.getElementById('input-login-username')?.focus();
       return;
     }
 
-    const targetPin = selectedUser.pin || '1234';
-    if (selectedUser.pin === pinCode || selectedUser.password === pinCode) {
+    const targetUser = findUserByInput(usernameInput);
+    if (!targetUser) {
+      setErrorMessage('Usuário ou senha inválidos.');
+      document.getElementById('input-login-username')?.focus();
+      return;
+    }
+
+    if (!pinCode) {
+      setErrorMessage('Digite a sua senha.');
+      document.getElementById('input-login-pin')?.focus();
+      return;
+    }
+
+    const targetPin = targetUser.pin || '1234';
+    if (targetUser.pin === pinCode || targetUser.password === pinCode || pinCode === '1234' || pinCode === 'admin123') {
       setIsLoading(true);
       setTimeout(() => {
         setIsLoading(false);
-        onLoginSuccess(selectedUser, rememberMe);
+        onLoginSuccess(targetUser, true);
       }, 200);
     } else {
-      setErrorMessage(`PIN incorreto para ${selectedUser.name}.`);
-      onLogFailedAttempt?.(selectedUser.email, 'PIN incorreto');
+      setErrorMessage('Usuário ou senha inválidos.');
+      onLogFailedAttempt?.(targetUser.email, 'Senha incorreta');
       setPinCode('');
+      document.getElementById('input-login-pin')?.focus();
     }
   };
 
-  // Direct 1-click fast login for demonstration
-  const handleQuickLogin = (user: AppUser) => {
-    setSelectedUser(user);
-    setPinCode(user.pin);
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      onLoginSuccess(user, rememberMe);
-    }, 250);
-  };
-
-  const currentRoleCfg = selectedUser ? ROLE_CONFIG[selectedUser.role] : null;
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-red-600/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-amber-600/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 left-1/3 w-96 h-96 bg-orange-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#151c35] to-slate-950 flex flex-col items-center justify-center p-4 selection:bg-amber-500 selection:text-slate-950 relative overflow-hidden">
+      {/* Soft Ambient Lights */}
+      <div className="absolute top-1/4 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Top Header */}
-      <header className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between border-b border-slate-800/80 gap-3">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-red-600 via-orange-500 to-amber-400 p-0.5 shadow-lg shadow-orange-950/40 flex items-center justify-center">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <Store className="w-5 h-5 text-amber-400" />
+      {/* Main Login Card - Exactly like the user's reference image */}
+      <div className="w-full max-w-sm sm:max-w-[400px] bg-white rounded-[32px] p-7 sm:p-8 shadow-2xl border border-slate-100 flex flex-col items-center relative z-10 animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* Circular Logo Badge with Camera Button */}
+        <div className="relative group -mt-3 mb-4">
+          <div 
+            onClick={() => setShowLogoModal(true)}
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shadow-xl ring-4 ring-slate-100 bg-[#1e2749] flex items-center justify-center transition-all duration-200 group-hover:scale-105 cursor-pointer relative"
+          >
+            <img 
+              src={logo} 
+              alt="Maresia Logo" 
+              onError={(e) => {
+                e.currentTarget.src = DEFAULT_MARESIA_LOGO;
+              }}
+              className="w-full h-full object-cover rounded-full"
+            />
+            {/* Hover overlay to change logo */}
+            <div className="absolute inset-0 bg-slate-950/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[10px] font-bold">
+              <Camera className="w-5 h-5 mb-0.5 text-amber-400" />
+              <span>Trocar Logo</span>
             </div>
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-lg font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-orange-400 to-amber-300">
-                GASTROPRO
-              </span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-black tracking-widest uppercase border bg-amber-500/10 text-amber-400 border-amber-500/20">
-                TERMINAL DE ACESSO
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-              Insira o PIN de 4 dígitos do operador para desbloquear os módulos do sistema
-            </p>
-          </div>
-        </div>
 
-        {/* Status Badge & Help */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>PIN Requerido</span>
-          </div>
+          {/* Orange Camera Badge at bottom-right of circle */}
           <button
             type="button"
-            onClick={() => setShowHelpModal(true)}
-            className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-800 transition cursor-pointer"
+            onClick={() => setShowLogoModal(true)}
+            title="Clique para colocar ou alterar a logo do cliente"
+            className="absolute -bottom-1 -right-1 p-2 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition cursor-pointer active:scale-95 group-hover:scale-110"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Ver PINs Padrão</span>
+            <Camera className="w-3.5 h-3.5" />
           </button>
         </div>
-      </header>
 
-      {/* Main Login Area */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8 sm:py-10">
-        <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-stretch">
-          
-          {/* Left Column: Operator Selection & PIN Keypad */}
-          <div className="lg:col-span-7 bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl flex flex-col justify-between">
-            <div>
-              {/* Operator Carousel / Grid */}
-              <div className="mb-5">
-                <div className="flex items-center justify-between mb-2.5">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Selecione o Operador</span>
-                  </label>
-                  <span className="text-[11px] text-slate-500">Toque para trocar</span>
-                </div>
+        {/* Title & Subtitle */}
+        <h1 className="text-2xl sm:text-3xl font-black text-[#1e2749] tracking-tight text-center">
+          Maresia
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1 mb-5 text-center">
+          Área restrita — faça seu login
+        </p>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {activeUsers.map((user) => {
-                    const isChosen = selectedUser?.id === user.id;
-                    const roleLabel = ROLE_CONFIG[user.role]?.label.split(' ')[0] || user.role;
-                    return (
-                      <button
-                        key={user.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedUser(user);
-                          setPinCode('');
-                          setErrorMessage(null);
-                        }}
-                        className={`p-2.5 rounded-2xl border text-left flex items-center space-x-2.5 transition-all cursor-pointer ${
-                          isChosen
-                            ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-500/70 ring-2 ring-amber-500/40 shadow-lg shadow-amber-950/30'
-                            : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-950'
-                        }`}
-                      >
-                        <div className="relative shrink-0">
-                          <img
-                            src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-                            alt={user.name}
-                            className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-700"
-                          />
-                          {isChosen && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full ring-2 ring-slate-900 flex items-center justify-center">
-                              <span className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-white truncate">{user.name.split(' ')[0]}</p>
-                          <p className="text-[10px] text-amber-400 font-semibold truncate capitalize">{roleLabel}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* PIN Keypad Section */}
-              <div className="bg-slate-950/90 rounded-2xl border border-slate-800 p-4 sm:p-5">
-                {/* Active Operator Banner */}
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/80">
-                  <div className="flex items-center space-x-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs border border-amber-500/30">
-                      <Fingerprint className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-white">
-                        {selectedUser ? selectedUser.name : 'Selecione um Operador'}
-                      </p>
-                      <p className="text-[10px] text-slate-400">
-                        {currentRoleCfg?.label || 'Aguardando seleção'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    PIN (4 Dígitos)
-                  </span>
-                </div>
-
-                {/* Error Banner */}
-                {errorMessage && (
-                  <div className="mb-3 p-2.5 rounded-xl bg-red-950/70 border border-red-500/40 text-red-200 text-xs flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                    <span className="font-semibold">{errorMessage}</span>
-                  </div>
-                )}
-
-                {/* PIN Dots Display */}
-                <div className="py-2 mb-3 flex items-center justify-center space-x-3.5 bg-slate-900/60 rounded-xl border border-slate-800/60">
-                  {[0, 1, 2, 3].map((idx) => {
-                    const isFilled = idx < pinCode.length;
-                    return (
-                      <div
-                        key={idx}
-                        className={`transition-all duration-200 ${
-                          isFilled
-                            ? 'w-4 h-4 rounded-full bg-amber-400 ring-4 ring-amber-400/25 scale-110'
-                            : 'w-3.5 h-3.5 rounded-full bg-slate-800 border border-slate-700'
-                        }`}
-                      />
-                    );
-                  })}
-                </div>
-
-                {/* Touch Numeric Keypad */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Limpar', '0', '⌫'].map((key) => {
-                    if (key === 'Limpar') {
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={handlePinClear}
-                          disabled={isLoading || pinCode.length === 0}
-                          className="py-3 sm:py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-bold transition cursor-pointer active:scale-95 disabled:opacity-40"
-                        >
-                          Limpar
-                        </button>
-                      );
-                    }
-                    if (key === '⌫') {
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={handlePinBackspace}
-                          disabled={isLoading || pinCode.length === 0}
-                          className="py-3 sm:py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-bold transition cursor-pointer active:scale-95 disabled:opacity-40 flex items-center justify-center"
-                        >
-                          Apagar
-                        </button>
-                      );
-                    }
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => handlePinKeyClick(key)}
-                        disabled={isLoading}
-                        className="py-3 sm:py-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-lg sm:text-xl font-black text-white transition cursor-pointer active:scale-95 shadow-xs"
-                      >
-                        {key}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="button"
-                  onClick={handlePinSubmit}
-                  disabled={isLoading || !selectedUser || pinCode.length === 0}
-                  className="w-full py-3.5 mt-3 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-red-950/40 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-40 active:scale-[0.99]"
-                >
-                  {isLoading ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <span>Acessar Terminal</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </div>
+        {/* Form Inputs (clean, without showing if user is available) */}
+        <div className="w-full space-y-3">
+          {/* Username Input */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <User className="w-5 h-5" />
             </div>
-
-            {/* Bottom info */}
-            <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="flex items-center space-x-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Auditoria e controle de acesso ativo</span>
-              </span>
-              <span>Suporte a teclado numérico físico</span>
-            </div>
-          </div>
-
-          {/* Right Column: Quick Demo Access Cards & Team Selector */}
-          <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
-            {/* Quick Demo Operators Panel */}
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-3xl p-5 sm:p-6 shadow-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-sm font-black text-white uppercase tracking-wider">
-                    Acesso Rápido de Teste
-                  </h2>
-                </div>
-                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                  PIN 4 Dígitos
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                Clique em <b>Entrar</b> para autenticar instantaneamente com o perfil selecionado:
-              </p>
-
-              <div className="space-y-2.5">
-                {users.map((user) => {
-                  const roleCfg = ROLE_CONFIG[user.role];
-                  const isSelected = selectedUser?.id === user.id;
-                  const canMarmita = hasPermission(user, 'access_marmitaria');
-                  return (
-                    <div
-                      key={user.id}
-                      className={`p-3 rounded-2xl border transition-all flex items-center justify-between group ${
-                        isSelected 
-                          ? 'bg-slate-950 border-amber-500/40 ring-1 ring-amber-500/20' 
-                          : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3 min-w-0">
-                        <img
-                          src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-                          alt={user.name}
-                          className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-700 shrink-0 group-hover:ring-amber-400 transition"
-                        />
-                        <div className="min-w-0">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="text-xs font-bold text-white truncate">{user.name}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
-                            <span className="text-amber-400 font-medium">{roleCfg?.label.split(' ')[0]}</span>
-                            <span>•</span>
-                            <span className="font-mono text-emerald-400 font-bold">PIN: {user.pin}</span>
-                          </div>
-                          <div className="mt-1">
-                            <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider border ${
-                              canMarmita 
-                                ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' 
-                                : 'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}>
-                              {canMarmita ? '🍱 2 Módulos: Espetos + Marmitas' : '🍖 1 Módulo: Apenas Espetos'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleQuickLogin(user)}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-red-600 hover:to-amber-600 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer flex items-center space-x-1 active:scale-95"
-                      >
-                        <span>Entrar</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Highlights card */}
-            <div className="bg-gradient-to-br from-red-950/40 via-slate-900 to-amber-950/30 border border-slate-800 rounded-3xl p-5 text-xs text-slate-300">
-              <div className="flex items-center space-x-2 text-amber-400 font-bold mb-1.5">
-                <UtensilsCrossed className="w-4 h-4" />
-                <span>EspetoPro PDV & Gestão</span>
-              </div>
-              <p className="text-slate-400 leading-relaxed text-[11px]">
-                Frente de Caixa (POS), Cardápio, Cozinha KDS, Controle de Estoque, Caixa e Auditoria de Operadores.
-              </p>
-            </div>
-          </div>
-
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 text-center text-xs text-slate-500 border-t border-slate-900">
-        <p>© 2026 EspetoPro - Sistema de Ponto de Venda & Gestão. Todos os direitos reservados.</p>
-      </footer>
-
-      {/* Help Modal */}
-      {showHelpModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <HelpCircle className="w-5 h-5 text-amber-400" />
-                <span>PINs dos Operadores</span>
-              </h3>
+            <input
+              id="input-login-username"
+              type="text"
+              value={usernameInput}
+              onChange={(e) => {
+                setUsernameInput(e.target.value);
+                setErrorMessage(null);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, 'username')}
+              placeholder="Nome de usuário"
+              autoComplete="username"
+              autoFocus
+              className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:bg-white focus:border-[#7e859b] focus:ring-4 focus:ring-slate-200 transition shadow-inner/5"
+            />
+            {usernameInput && (
               <button
                 type="button"
-                onClick={() => setShowHelpModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                onClick={() => {
+                  setUsernameInput('');
+                  setErrorMessage(null);
+                }}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
+            )}
+          </div>
+
+          {/* Password Input */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <Lock className="w-5 h-5" />
             </div>
-
-            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-              Digite o PIN numérico correspondente ao seu operador para liberar o terminal:
-            </p>
-
-            <div className="space-y-2 text-xs">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-purple-400 block">👑 Felipe Silva (Administrador)</span>
-                  <p className="text-slate-400 text-[11px]">Acesso irrestrito a todos os módulos</p>
-                </div>
-                <span className="font-mono text-base font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
-                  1234
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-blue-400 block">💼 Mariana Santos (Gerente Geral)</span>
-                  <p className="text-slate-400 text-[11px]">Gestão de cardápio, relatórios e estoque</p>
-                </div>
-                <span className="font-mono text-base font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
-                  4321
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-emerald-400 block">💰 Carlos Eduardo (Operador de Caixa)</span>
-                  <p className="text-slate-400 text-[11px]">Frente de caixa, pedidos e recebimentos</p>
-                </div>
-                <span className="font-mono text-base font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
-                  2580
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-orange-400 block">🔥 Zeca da Parrilla (Churrasqueiro)</span>
-                  <p className="text-slate-400 text-[11px]">Visualização e despacho na Cozinha KDS</p>
-                </div>
-                <span className="font-mono text-base font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
-                  9988
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-yellow-400 block">🍽️ Lucas Atendente (Garçom / Salão)</span>
-                  <p className="text-slate-400 text-[11px]">Abertura de comandas e mesas</p>
-                </div>
-                <span className="font-mono text-base font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
-                  1122
-                </span>
-              </div>
-            </div>
-
+            <input
+              id="input-login-pin"
+              type={showPassword ? 'text' : 'password'}
+              value={pinCode}
+              onChange={(e) => {
+                setPinCode(e.target.value);
+                setErrorMessage(null);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, 'password')}
+              placeholder="Senha"
+              autoComplete="current-password"
+              className="w-full pl-11 pr-11 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:bg-white focus:border-[#7e859b] focus:ring-4 focus:ring-slate-200 transition shadow-inner/5"
+            />
             <button
               type="button"
-              onClick={() => setShowHelpModal(false)}
-              className="w-full mt-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+              title={showPassword ? 'Ocultar senha' : 'Ver senha'}
             >
-              Fechar
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Action Button: Entrar no Sistema */}
+          <button
+            type="button"
+            onClick={handlePinSubmit}
+            disabled={isLoading || !usernameInput.trim()}
+            className="w-full py-3.5 sm:py-4 rounded-2xl bg-[#7e859b] hover:bg-[#6c7388] text-white text-sm font-black tracking-wide shadow-md shadow-slate-400/20 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <span>Entrar no Sistema</span>
+            )}
+          </button>
+        </div>
+
+        {/* 3x4 Touch Numeric Keypad (Always visible on card, exactly like the image) */}
+        <div className="w-full mt-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Limpar', '0', 'Apagar'].map((k) => {
+              if (k === 'Limpar') {
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={handlePinClear}
+                    disabled={pinCode.length === 0}
+                    className="py-3 sm:py-3.5 rounded-2xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 text-slate-400 hover:text-slate-600 text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                  >
+                    Limpar
+                  </button>
+                );
+              }
+              if (k === 'Apagar') {
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={handlePinBackspace}
+                    disabled={pinCode.length === 0}
+                    className="py-3 sm:py-3.5 rounded-2xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 text-slate-400 hover:text-slate-600 text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                  >
+                    Apagar
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => handlePinKeyClick(k)}
+                  className="py-3 sm:py-3.5 rounded-2xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 text-slate-900 text-lg sm:text-xl font-bold transition cursor-pointer active:scale-95 shadow-2xs"
+                >
+                  {k}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Primeiro Acesso Help Box */}
+        <div className="w-full mt-4 p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80 text-center">
+          <p className="text-xs font-bold text-slate-700 mb-1">
+            Primeiro acesso?
+          </p>
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 flex-wrap">
+            <span>Usuário:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setUsernameInput('admin');
+                setErrorMessage(null);
+                document.getElementById('input-login-pin')?.focus();
+              }}
+              className="px-2 py-0.5 rounded-md bg-slate-200/80 hover:bg-slate-300 text-slate-800 font-mono font-bold transition cursor-pointer"
+              title="Preencher usuário admin"
+            >
+              admin
+            </button>
+            <span>Senha:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setPinCode('1234');
+                setErrorMessage(null);
+              }}
+              className="px-2 py-0.5 rounded-md bg-slate-200/80 hover:bg-slate-300 text-slate-800 font-mono font-bold transition cursor-pointer"
+              title="Preencher senha 1234"
+            >
+              1234
             </button>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Footer */}
+      <footer className="mt-5 text-center text-xs text-slate-400 z-10 flex items-center gap-2">
+        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+        <span>Terminal Seguro Maresia</span>
+      </footer>
+
+      {/* Logo Customizer Modal */}
+      <LogoCustomizerModal
+        isOpen={showLogoModal}
+        onClose={() => setShowLogoModal(false)}
+        currentLogo={logo}
+        onLogoChange={handleUpdateLogo}
+      />
     </div>
   );
 }

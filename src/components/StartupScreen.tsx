@@ -13,6 +13,8 @@ interface StartupScreenProps {
   marmitaOrdersCount: number;
   onSelectSystem: (module: SystemModule, rememberChoice: boolean) => void;
   onLogout?: () => void;
+  logo?: string;
+  onOpenLogoModal?: () => void;
 }
 
 export const StartupScreen: React.FC<StartupScreenProps> = ({
@@ -20,7 +22,9 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
   activeOrdersCount,
   marmitaOrdersCount,
   onSelectSystem,
-  onLogout
+  onLogout,
+  logo,
+  onOpenLogoModal
 }) => {
   const [rememberChoice, setRememberChoice] = React.useState<boolean>(false);
   const canAccessMarmitaria = hasPermission(currentUser, 'access_marmitaria');
@@ -47,17 +51,25 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
       {/* Top Bar / Brand & Operator Info */}
       <header className="max-w-6xl w-full mx-auto px-4 sm:px-6 pt-6 sm:pt-8 flex items-center justify-between z-10">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg shadow-red-500/20">
-            <Store className="w-5 h-5 text-white" />
+          <div 
+            onClick={onOpenLogoModal}
+            className="w-11 h-11 rounded-2xl overflow-hidden shadow-lg border border-slate-700 bg-[#1e2749] flex items-center justify-center cursor-pointer transition-transform hover:scale-105"
+            title="Clique para trocar a logo do Maresia"
+          >
+            {logo ? (
+              <img src={logo} alt="Maresia Logo" className="w-full h-full object-cover" />
+            ) : (
+              <Store className="w-6 h-6 text-amber-400" />
+            )}
           </div>
           <div>
-            <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5">
-              Gastro<span className="text-amber-400">Pro</span>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                Hub Multi-Sistemas
+            <h1 className="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-1.5">
+              Maresia
+              <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                Hub do Sistema
               </span>
             </h1>
-            <p className="text-xs text-slate-400">Gestão Gastronômica Integrada</p>
+            <p className="text-xs text-slate-400">Terminal Gastronômico Integrado</p>
           </div>
         </div>
 

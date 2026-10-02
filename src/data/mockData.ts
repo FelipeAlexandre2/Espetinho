@@ -2007,6 +2007,7 @@ export const INITIAL_USERS: AppUser[] = [
   {
     id: 'user-admin',
     name: 'Felipe Alexandre (Proprietário)',
+    username: 'admin',
     email: 'admin@espetopro.com.br',
     role: 'admin',
     pin: '1234',
@@ -2021,6 +2022,7 @@ export const INITIAL_USERS: AppUser[] = [
   {
     id: 'user-gerente',
     name: 'Mariana Silveira',
+    username: 'mariana',
     email: 'mariana.gerente@espetopro.com.br',
     role: 'gerente',
     pin: '4321',
@@ -2035,6 +2037,7 @@ export const INITIAL_USERS: AppUser[] = [
   {
     id: 'user-caixa',
     name: 'Carlos Mendes',
+    username: 'carlos',
     email: 'carlos.caixa@espetopro.com.br',
     role: 'caixa',
     pin: '2580',
@@ -2049,6 +2052,7 @@ export const INITIAL_USERS: AppUser[] = [
   {
     id: 'user-churrasqueiro',
     name: 'Mestre Zeca da Brasa',
+    username: 'zeca',
     email: 'zeca.parrilla@espetopro.com.br',
     role: 'churrasqueiro',
     pin: '9988',
@@ -2063,6 +2067,7 @@ export const INITIAL_USERS: AppUser[] = [
   {
     id: 'user-garcom',
     name: 'Lucas Rocha',
+    username: 'lucas',
     email: 'lucas.atendimento@espetopro.com.br',
     role: 'garcom',
     pin: '1122',

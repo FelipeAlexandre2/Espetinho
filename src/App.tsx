@@ -1203,6 +1203,7 @@ export default function App() {
         onLogFailedAttempt={handleLogFailedAttempt}
         logo={logo}
         onLogoChange={handleLogoChange}
+        onAddUser={handleAddUser}
       />
     );
   }

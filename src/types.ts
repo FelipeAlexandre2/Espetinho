@@ -213,6 +213,7 @@ export interface SystemLog {
 export interface AppUser {
   id: string;
   name: string;
+  username?: string; // Nome de usuário exclusivo para login
   email: string;
   role: UserRole;
   pin: string; // 4-6 digit numeric code for quick access

@@ -4,7 +4,7 @@ import {
   ROLE_CONFIG, DEFAULT_ROLE_PERMISSIONS, PERMISSION_DEFINITIONS, hasPermission 
 } from '../types';
 import { 
-  Users, UserPlus, Shield, ShieldCheck, ShieldAlert, Key, 
+  Users, User, UserPlus, Shield, ShieldCheck, ShieldAlert, Key, 
   Search, Filter, Edit3, Trash2, Check, X, Eye, EyeOff, 
   Sparkles, CheckCircle2, XCircle, RefreshCw, UserCheck, 
   Lock, Unlock, Phone, Mail, Clock, HelpCircle, AlertTriangle,
@@ -79,6 +79,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
   // Form State
   const [formData, setFormData] = useState<{
     name: string;
+    username: string;
     email: string;
     phone: string;
     role: UserRole;
@@ -89,6 +90,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
     customPermissionsEnabled: boolean;
   }>({
     name: '',
+    username: '',
     email: '',
     phone: '',
     role: 'garcom',
@@ -217,6 +219,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
     setEditingUser(null);
     setFormData({
       name: '',
+      username: '',
       email: '',
       phone: '',
       role: 'garcom',
@@ -246,6 +249,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
     setEditingUser(user);
     setFormData({
       name: user.name,
+      username: user.username || user.email.split('@')[0],
       email: user.email,
       phone: user.phone || '',
       role: user.role,
@@ -317,6 +321,21 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
       errors.name = 'O nome do colaborador é obrigatório.';
     }
 
+    const cleanUsername = (formData.username.trim() || formData.email.split('@')[0] || formData.name.trim().toLowerCase().split(' ')[0])
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]/g, '');
+
+    if (!cleanUsername) {
+      errors.username = 'O nome de usuário para login é obrigatório.';
+    } else {
+      const duplicateUsernameUser = users.find(
+        (u) => (u.username || u.email.split('@')[0]).toLowerCase() === cleanUsername && u.id !== editingUser?.id
+      );
+      if (duplicateUsernameUser) {
+        errors.username = `O nome de usuário "${cleanUsername}" já está em uso por "${duplicateUsernameUser.name}".`;
+      }
+    }
+
     if (!formData.email.trim()) {
       errors.email = 'O e-mail é obrigatório.';
     } else if (!formData.email.includes('@')) {
@@ -345,6 +364,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
       const updatedUser: AppUser = {
         ...editingUser,
         name: formData.name.trim(),
+        username: cleanUsername,
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         role: formData.role,
@@ -357,11 +377,12 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
       if (currentUser.id === updatedUser.id) {
         onSwitchCurrentUser(updatedUser);
       }
-      showToast(`Colaborador "${updatedUser.name}" atualizado com sucesso!`, 'success');
+      showToast(`Colaborador "${updatedUser.name}" (@${cleanUsername}) atualizado com sucesso!`, 'success');
     } else {
       // Create
       onAddUser({
         name: formData.name.trim(),
+        username: cleanUsername,
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         role: formData.role,
@@ -371,7 +392,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
         permissions: formData.permissions,
         lastLogin: 'Nunca acessou',
       });
-      showToast(`Novo colaborador "${formData.name.trim()}" criado com sucesso!`, 'success');
+      showToast(`Novo colaborador "${formData.name.trim()}" (@${cleanUsername}) criado com sucesso!`, 'success');
     }
 
     setIsModalOpen(false);
@@ -890,13 +911,18 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                               </span>
                             )}
                           </div>
-                          <span
-                            className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                              ROLE_CONFIG[user.role].badgeClass
-                            }`}
-                          >
-                            {ROLE_CONFIG[user.role].label}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                ROLE_CONFIG[user.role].badgeClass
+                              }`}
+                            >
+                              {ROLE_CONFIG[user.role].label}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              @{user.username || user.email.split('@')[0]}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -1867,10 +1893,51 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                     required
                     placeholder="Ex: João da Silva"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!editingUser && !formData.username) {
+                        const autoUser = val.toLowerCase().trim().split(' ')[0].replace(/[^a-z0-9._-]/g, '');
+                        setFormData({ ...formData, name: val, username: autoUser });
+                      } else {
+                        setFormData({ ...formData, name: val });
+                      }
+                    }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                   />
                   {formErrors.name && <p className="text-xs text-rose-600 font-bold">{formErrors.name}</p>}
+                </div>
+
+                {/* Nome de Usuário / Login */}
+                <div className="sm:col-span-2 space-y-1 bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-slate-800 uppercase tracking-wider block flex items-center gap-1.5">
+                      <User className="w-4 h-4 text-amber-600" />
+                      <span>Nome de Usuário (Login no Sistema)</span> <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                      Nome digitado na tela de login
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-sm pointer-events-none">
+                      @
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: joao, admin, felipe, carlos..."
+                      value={formData.username}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        username: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '') 
+                      })}
+                      className="w-full pl-8 pr-3.5 py-2.5 bg-white border border-amber-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 shadow-xs"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    O colaborador usará este nome exato no campo <strong>Nome de usuário</strong> para entrar no sistema.
+                  </p>
+                  {formErrors.username && <p className="text-xs text-rose-600 font-bold">{formErrors.username}</p>}
                 </div>
 
                 {/* Email */}

@@ -198,6 +198,7 @@ export function loadUsers(): AppUser[] {
       if (match) {
         return {
           ...user,
+          username: user.username || match.username || user.email.split('@')[0],
           password: user.password || match.password || '1234',
           pin: user.pin || match.pin || '1234',
           permissions: mergedPerms,
@@ -205,6 +206,7 @@ export function loadUsers(): AppUser[] {
       }
       return {
         ...user,
+        username: user.username || user.email.split('@')[0] || user.name.split(' ')[0].toLowerCase(),
         password: user.password || user.pin || '1234',
         pin: user.pin || '1234',
         permissions: mergedPerms,
@@ -273,8 +275,11 @@ export function loadCurrentUser(): AppUser {
         ...(userPerms && typeof userPerms === 'object' ? userPerms : {}),
       };
 
+      const match = INITIAL_USERS.find((u) => u.id === parsed.id);
+
       return {
         ...parsed,
+        username: parsed.username || match?.username || parsed.email?.split('@')[0] || 'admin',
         permissions: mergedPerms,
       };
     }

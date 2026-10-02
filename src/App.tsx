@@ -44,12 +44,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('caixa');
   const [activeModule, setActiveModule] = useState<SystemModule>(() => loadActiveModule());
   const [isModuleModalOpen, setIsModuleModalOpen] = useState<boolean>(false);
-  const [showStartupScreen, setShowStartupScreen] = useState<boolean>(() => {
-    // When starting the system, show the choice screen by default unless remembered
-    const remembered = localStorage.getItem('gastro_remember_startup_choice') === 'true';
-    if (remembered) return false;
-    return true;
-  });
+  const [showStartupScreen, setShowStartupScreen] = useState<boolean>(true);
 
   // Customer QR Code Menu Mode (detected from URL ?view=cardapio or ?mesa=... or preview)
   const [isCustomerMode, setIsCustomerMode] = useState<boolean>(() => {
@@ -80,11 +75,8 @@ export default function App() {
   const [marmitaOptions, setMarmitaOptions] = useState<MarmitaOption[]>(() => loadMarmitaOptions());
   const [marmitariaSettings, setMarmitariaSettings] = useState<MarmitaSettings>(() => loadMarmitaSettings());
 
-  // Authentication State: If not authenticated, displays Login Screen
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    const session = loadAuthSession();
-    return session.isAuthenticated;
-  });
+  // Authentication State: Require password/PIN entry on terminal start
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
@@ -383,6 +375,7 @@ export default function App() {
     setIsAuthenticated(true);
     saveCurrentUser(user);
     saveAuthSession({ isAuthenticated: true, userId: user.id, rememberMe });
+    setShowStartupScreen(true);
 
     // Set starting tab & module matching user's permissions
     if (activeModule === 'marmitaria' && !hasPermission(user, 'access_marmitaria')) {
@@ -1190,7 +1183,19 @@ export default function App() {
     );
   }
 
+  // Render dedicated Login Screen when user is not authenticated (Password/PIN required first!)
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen
+        users={users}
+        onLoginSuccess={handleLoginSuccess}
+        onLogFailedAttempt={handleLogFailedAttempt}
+      />
+    );
+  }
+
   // Render dedicated Startup Screen when system starts or requested by operator
+  // If permitted, displays BOTH modules. If not permitted, displays ONLY 1 module!
   if (showStartupScreen) {
     return (
       <StartupScreen
@@ -1198,21 +1203,7 @@ export default function App() {
         activeOrdersCount={activeOrdersCount}
         marmitaOrdersCount={activeMarmitasCount}
         onSelectSystem={handleStartupSelectSystem}
-        onLogout={isAuthenticated ? handleLogout : undefined}
-      />
-    );
-  }
-
-  // Render dedicated Login Screen when user is not authenticated
-  if (!isAuthenticated) {
-    return (
-      <LoginScreen
-        users={users}
-        onLoginSuccess={handleLoginSuccess}
-        onLogFailedAttempt={handleLogFailedAttempt}
-        currentModule={activeModule}
-        onSelectModule={handleSelectModule}
-        onBackToStartup={() => setShowStartupScreen(true)}
+        onLogout={handleLogout}
       />
     );
   }

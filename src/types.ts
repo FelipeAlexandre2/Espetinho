@@ -394,6 +394,8 @@ export const TABLES = [
   'Balcão 01', 'Balcão 02',
   'Mesa 01', 'Mesa 02', 'Mesa 03', 'Mesa 04', 'Mesa 05', 'Mesa 06',
   'Mesa 07', 'Mesa 08', 'Mesa 09', 'Mesa 10', 'Mesa 11', 'Mesa 12',
+  'Mesa 13', 'Mesa 14', 'Mesa 15', 'Mesa 16', 'Mesa 17', 'Mesa 18',
+  'Mesa 19', 'Mesa 20',
   'Para Viagem', 'Delivery'
 ];
 

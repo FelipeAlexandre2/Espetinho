@@ -4,7 +4,7 @@ import {
   Flame, KeyRound, ShieldCheck, 
   AlertCircle, Sparkles, ArrowRight, 
   HelpCircle, UtensilsCrossed, ChevronRight, Fingerprint,
-  UserCheck, Delete, RefreshCw, ChefHat, ArrowLeft
+  UserCheck, Delete, RefreshCw, ChefHat, ArrowLeft, Store
 } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -152,93 +152,31 @@ export function LoginScreen({
       {/* Top Header */}
       <header className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between border-b border-slate-800/80 gap-3">
         <div className="flex items-center space-x-3">
-          {onBackToStartup && (
-            <button
-              id="login-btn-back-startup"
-              type="button"
-              onClick={onBackToStartup}
-              className="mr-1 p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer"
-              title="Voltar para seleção de sistemas"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Sistemas</span>
-            </button>
-          )}
-
-          <div className={`w-10 h-10 rounded-xl p-0.5 shadow-lg flex items-center justify-center ${
-            currentModule === 'marmitaria'
-              ? 'bg-gradient-to-tr from-orange-600 via-amber-500 to-yellow-400 shadow-orange-900/30'
-              : 'bg-gradient-to-tr from-red-600 via-orange-500 to-amber-400 shadow-red-900/30'
-          }`}>
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-red-600 via-orange-500 to-amber-400 p-0.5 shadow-lg shadow-orange-950/40 flex items-center justify-center">
             <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              {currentModule === 'marmitaria' ? (
-                <ChefHat className="w-5 h-5 text-orange-400" />
-              ) : (
-                <Flame className="w-5 h-5 text-amber-400 animate-pulse" />
-              )}
+              <Store className="w-5 h-5 text-amber-400" />
             </div>
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className={`text-lg font-black tracking-tight bg-clip-text text-transparent ${
-                currentModule === 'marmitaria'
-                  ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300'
-                  : 'bg-gradient-to-r from-red-400 via-orange-400 to-amber-300'
-              }`}>
-                {currentModule === 'marmitaria' ? 'MARMITARIAPRO' : 'ESPETOPRO'}
+              <span className="text-lg font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-orange-400 to-amber-300">
+                GASTROPRO
               </span>
-              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-widest uppercase border ${
-                currentModule === 'marmitaria'
-                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-                  : 'bg-red-500/20 text-red-400 border-red-500/30'
-              }`}>
-                {currentModule === 'marmitaria' ? 'MARMITEX & KDS' : 'POS TOUCH v2.5'}
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-black tracking-widest uppercase border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                TERMINAL DE ACESSO
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-              {currentModule === 'marmitaria' 
-                ? 'Acesso Rápido ao Sistema de Marmitas'
-                : 'Acesso Rápido por PIN de Terminal'}
+              Insira o PIN de 4 dígitos do operador para desbloquear os módulos do sistema
             </p>
           </div>
         </div>
 
-        {/* System Selector Switch & Help */}
+        {/* Status Badge & Help */}
         <div className="flex items-center space-x-2 sm:space-x-3">
-          {onSelectModule && (
-            <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
-              <button
-                type="button"
-                onClick={() => onSelectModule('espetos')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
-                  currentModule === 'espetos'
-                    ? 'bg-red-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Flame className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Espetos</span>
-              </button>
-              {(!selectedUser || hasPermission(selectedUser, 'access_marmitaria')) && (
-                <button
-                  type="button"
-                  onClick={() => onSelectModule('marmitaria')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
-                    currentModule === 'marmitaria'
-                      ? 'bg-orange-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ChefHat className="w-3.5 h-3.5" />
-                  <span className="hidden xs:inline">Marmitaria</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="hidden md:flex items-center space-x-2 text-xs text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
+          <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Terminal Seguro</span>
+            <span>PIN Requerido</span>
           </div>
           <button
             type="button"
@@ -452,6 +390,7 @@ export function LoginScreen({
                 {users.map((user) => {
                   const roleCfg = ROLE_CONFIG[user.role];
                   const isSelected = selectedUser?.id === user.id;
+                  const canMarmita = hasPermission(user, 'access_marmitaria');
                   return (
                     <div
                       key={user.id}
@@ -475,6 +414,15 @@ export function LoginScreen({
                             <span className="text-amber-400 font-medium">{roleCfg?.label.split(' ')[0]}</span>
                             <span>•</span>
                             <span className="font-mono text-emerald-400 font-bold">PIN: {user.pin}</span>
+                          </div>
+                          <div className="mt-1">
+                            <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider border ${
+                              canMarmita 
+                                ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' 
+                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                            }`}>
+                              {canMarmita ? '🍱 2 Módulos: Espetos + Marmitas' : '🍖 1 Módulo: Apenas Espetos'}
+                            </span>
                           </div>
                         </div>
                       </div>

@@ -63,8 +63,12 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
 
         {/* Current Operator Badge & Logout */}
         <div className="flex items-center space-x-2.5 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-2xl backdrop-blur-md">
-          <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs">
-            {currentUser.name.charAt(0).toUpperCase()}
+          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs border border-amber-500/30 overflow-hidden shrink-0">
+            {currentUser.avatar ? (
+              <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+            ) : (
+              currentUser.name.charAt(0).toUpperCase()
+            )}
           </div>
           <div className="hidden sm:block text-left">
             <p className="text-xs font-bold text-white leading-tight">{currentUser.name}</p>
@@ -75,10 +79,11 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
               id="startup-logout-button"
               type="button"
               onClick={onLogout}
-              title="Trocar operador / Sair"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer ml-1"
+              title="Trocar de operador / Bloquear terminal"
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition cursor-pointer ml-1 text-xs font-bold active:scale-95"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Trocar Usuário</span>
             </button>
           )}
         </div>
@@ -86,17 +91,25 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
 
       {/* Main Choice Section */}
       <main className="max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12 z-10 flex flex-col items-center justify-center flex-1">
-        {/* Intro heading */}
+        {/* Intro heading tailored to permissions */}
         <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-12 space-y-2.5">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold">
+          <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold border ${
+            canAccessMarmitaria 
+              ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+          }`}>
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Inicialização do Ponto de Atendimento</span>
+            <span>
+              {canAccessMarmitaria ? '✨ 2 Módulos Habilitados para seu Perfil' : '🛡️ 1 Módulo Habilitado (Acesso Restrito)'}
+            </span>
           </div>
           <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
-            Qual sistema você deseja iniciar?
+            {canAccessMarmitaria ? 'Qual sistema você deseja iniciar?' : 'Módulo Autorizado: Sistema EspetoPro'}
           </h2>
           <p className="text-sm sm:text-base text-slate-400">
-            Selecione o módulo de trabalho. Você pode alternar entre os sistemas a qualquer momento pela barra superior.
+            {canAccessMarmitaria 
+              ? `Olá, ${currentUser.name}! Selecione em qual módulo deseja trabalhar hoje. Você possui acesso liberado aos 2 módulos (Espetos e Marmitaria):` 
+              : `Olá, ${currentUser.name}! Seu usuário está autorizado exclusivamente para o Sistema EspetoPro. O módulo de Marmitaria está bloqueado para o seu perfil.`}
           </p>
         </div>
 
@@ -262,6 +275,21 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
             </div>
           )}
         </div>
+
+        {/* Informative restricted notice when user does not have Marmitaria access */}
+        {!canAccessMarmitaria && (
+          <div className="mt-4 w-full max-w-xl mx-auto p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 flex items-center space-x-3 shadow-md">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-200">Módulo Marmitaria Bloqueado</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Seu perfil não possui permissão para acessar o Sistema Marmitaria. Por isso, apenas o módulo EspetoPro está disponível.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Helper bottom options */}
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 w-full max-w-2xl bg-slate-900/60 border border-slate-800/80 px-4 py-3 rounded-2xl text-xs text-slate-400">

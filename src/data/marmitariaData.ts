@@ -1,4 +1,4 @@
-import { MarmitaSizeConfig, MarmitaOption, MarmitaOrder, MarmitaSettings } from '../types';
+import { MarmitaSizeConfig, MarmitaOption, MarmitaOrder, MarmitaSettings, MarmitaDailyMenu } from '../types';
 
 export const INITIAL_MARMITA_SIZES: MarmitaSizeConfig[] = [
   {
@@ -20,7 +20,7 @@ export const INITIAL_MARMITA_SIZES: MarmitaSizeConfig[] = [
     weightGrams: 650,
     maxProteins: 1,
     maxSides: 3,
-    description: 'Tamanho mais pedido. 1 a 2 carnes, arroz, feijão, 3 guarnições e salada.',
+    description: 'Tamanho mais pedido. 1 carne generosa, arroz, feijão, 3 guarnições e salada.',
     badgeColor: 'bg-blue-100 text-blue-800 border-blue-300'
   },
   {
@@ -33,17 +33,65 @@ export const INITIAL_MARMITA_SIZES: MarmitaSizeConfig[] = [
     maxSides: 4,
     description: 'Porção reforçada. Até 2 carnes generosas, arroz, feijão, 4 guarnições e salada.',
     badgeColor: 'bg-amber-100 text-amber-800 border-amber-300'
+  }
+];
+
+export const INITIAL_DAILY_MENUS: MarmitaDailyMenu[] = [
+  {
+    dayKey: 'segunda',
+    dayLabel: 'Segunda-feira',
+    carnes: ['Bife Acebolado', 'Filé de Frango Grelhado', 'Calabresa Acebolada'],
+    acompanhamentos: ['Arroz Branco', 'Feijão Carioca', 'Farofa da Casa', 'Macarrão Alho e Óleo', 'Vinagrete'],
+    destaquePrato: 'Virado Paulista Tradicional',
+    observacoes: 'Acompanha torresmo e couve refogada.'
   },
   {
-    size: 'executiva',
-    name: 'Marmita Executiva Premium',
-    label: 'Executiva',
-    price: 29.90,
-    weightGrams: 950,
-    maxProteins: 2,
-    maxSides: 4,
-    description: 'Embalagem especial selada com divisórias. Carnes nobres, guarnições livres e sobremesa inclusa.',
-    badgeColor: 'bg-purple-100 text-purple-800 border-purple-300'
+    dayKey: 'terca',
+    dayLabel: 'Terça-feira',
+    carnes: ['Bife à Parmegiana', 'Sobrecoxa Assada', 'Carne de Panela com Batatas'],
+    acompanhamentos: ['Arroz Branco', 'Feijão Carioca', 'Purê de Batatas', 'Farofa Crocante', 'Salada Verde'],
+    destaquePrato: 'Bife à Parmegiana com Purê Cremoso',
+    observacoes: 'Molho artesanal de tomate fresco.'
+  },
+  {
+    dayKey: 'quarta',
+    dayLabel: 'Quarta-feira',
+    carnes: ['Feijoada Completa', 'Bisteca Suína Grelhada', 'Filé de Frango'],
+    acompanhamentos: ['Arroz Branco', 'Feijão Preto da Feijoada', 'Couve com Bacon', 'Farofa Rica', 'Laranja', 'Torresmo'],
+    destaquePrato: 'Feijoada Completa da Casa',
+    observacoes: 'Tradicional feijoada com carnes nobres e acompanhamentos completos.'
+  },
+  {
+    dayKey: 'quinta',
+    dayLabel: 'Quinta-feira',
+    carnes: ['Costelinha Barbecue', 'Bife Grelhado', 'Frango ao Molho com Polenta'],
+    acompanhamentos: ['Arroz Branco', 'Feijão Carioca', 'Polenta Frita', 'Farofa da Casa', 'Maionese'],
+    destaquePrato: 'Costelinha Suína com Polenta Frita',
+    observacoes: 'Costelinha dourada e macia.'
+  },
+  {
+    dayKey: 'sexta',
+    dayLabel: 'Sexta-feira',
+    carnes: ['Filé de Tilápia Frito', 'Bife Acebolado', 'Strogonoff de Frango'],
+    acompanhamentos: ['Arroz Branco', 'Feijão Carioca', 'Batata Palha', 'Pirão de Peixe', 'Salada Tropical'],
+    destaquePrato: 'Strogonoff de Frango com Batata Palha',
+    observacoes: 'Opção de peixe fresco toda sexta.'
+  },
+  {
+    dayKey: 'sabado',
+    dayLabel: 'Sábado',
+    carnes: ['Feijoada Nobre', 'Cupim Assado', 'Picanha Suína'],
+    acompanhamentos: ['Arroz Branco', 'Feijão da Feijoada', 'Couve', 'Farofa com Bacon', 'Torresmo', 'Vinagrete'],
+    destaquePrato: 'Feijoada Especial de Sábado',
+    observacoes: 'Almoço especial de fim de semana.'
+  },
+  {
+    dayKey: 'domingo',
+    dayLabel: 'Domingo',
+    carnes: ['Frango Assado com Batatas', 'Costela Bovina Assada', 'Lasanha à Bolonhesa'],
+    acompanhamentos: ['Arroz Branco', 'Feijão Tropeiro', 'Maionese Especial da Casa', 'Farofa', 'Salada'],
+    destaquePrato: 'Assados Especiais de Domingo',
+    observacoes: 'Carnes assadas lentamente no forno e churrasqueira.'
   }
 ];
 

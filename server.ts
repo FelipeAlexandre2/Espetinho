@@ -677,6 +677,12 @@ async function startServer() {
     res.json(shift);
   });
 
+  // Explicit static routes for GitHub logo & photos directory
+  app.use('/logo', express.static(path.join(process.cwd(), 'public', 'logo')));
+  app.use('/logo', express.static(path.join(process.cwd(), 'logo')));
+  app.use('/fotos-sistema', express.static(path.join(process.cwd(), 'public', 'fotos-sistema')));
+  app.use('/fotos-sistema', express.static(path.join(process.cwd(), 'fotos-sistema')));
+
   // Serve Frontend / Vite Middleware
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

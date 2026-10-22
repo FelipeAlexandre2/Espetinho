@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { 
   AppUser, UserRole, SystemPermission, 
-  ROLE_CONFIG, DEFAULT_ROLE_PERMISSIONS, PERMISSION_DEFINITIONS, hasPermission 
+  ROLE_CONFIG, DEFAULT_ROLE_PERMISSIONS, PERMISSION_DEFINITIONS, hasPermission,
+  ReceiptSettings, ReceiptPaperWidth, ReceiptFontSize
 } from '../types';
+import { getReceiptSettings, saveReceiptSettings } from '../utils/printReceipt';
 import { 
   Users, User, UserPlus, Shield, ShieldCheck, ShieldAlert, Key, 
   Search, Filter, Edit3, Trash2, Check, X, Eye, EyeOff, 
@@ -10,7 +12,7 @@ import {
   Lock, Unlock, Phone, Mail, Clock, HelpCircle, AlertTriangle,
   Flame, DollarSign, Package, BarChart3, UtensilsCrossed, ChefHat,
   ToggleLeft, ToggleRight, CheckSquare, Square, ChevronRight, Zap,
-  FileText, Info, Award
+  FileText, Info, Award, Building2, Printer, Save, Store
 } from 'lucide-react';
 
 interface UsuariosTabProps {
@@ -44,7 +46,8 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
   // Check if current user has permission to manage users
   const isAdmin = currentUser.role === 'admin' || hasPermission(currentUser, 'manage_users');
 
-  const [subTab, setSubTab] = useState<'colaboradores' | 'matriz' | 'seguranca'>('colaboradores');
+  const [subTab, setSubTab] = useState<'colaboradores' | 'matriz' | 'seguranca' | 'empresa'>('colaboradores');
+  const [empresaSettings, setEmpresaSettings] = useState<ReceiptSettings>(() => getReceiptSettings());
   const [matrixMode, setMatrixMode] = useState<'colaboradores' | 'cargos'>('colaboradores');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('todos');
@@ -342,8 +345,8 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
       errors.email = 'Insira um e-mail válido.';
     }
 
-    if (!formData.pin || formData.pin.length < 4) {
-      errors.pin = 'O PIN deve ter no mínimo 4 dígitos numéricos.';
+    if (!formData.pin || formData.pin.length < 3 || formData.pin.length > 8) {
+      errors.pin = 'A senha/PIN deve ter entre 3 e 8 dígitos numéricos.';
     }
 
     // Check duplicate PIN for active users
@@ -683,7 +686,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
           }`}
         >
           <Users className="w-4 h-4 text-purple-600" />
-          <span>Colaboradores & Acessos ({users.length})</span>
+          <span>Equipe ({users.length})</span>
         </button>
 
         <button
@@ -695,7 +698,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
           }`}
         >
           <Zap className="w-4 h-4 text-amber-500" />
-          <span>Matriz de Permissões</span>
+          <span>Permissões</span>
         </button>
 
         <button
@@ -708,6 +711,18 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
         >
           <Key className="w-4 h-4 text-amber-600" />
           <span>Segurança & PINs</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('empresa')}
+          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+            subTab === 'empresa'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <Store className="w-4 h-4 text-orange-600" />
+          <span>Dados da Empresa & Comanda</span>
         </button>
       </div>
 
@@ -1024,6 +1039,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                           {PERMISSION_DEFINITIONS.map((perm) => {
                             const isGranted = hasPermission(user, perm.key);
                             const isMarmita = perm.key === 'access_marmitaria';
+                            const isPhotos = perm.key === 'manage_system_photos';
                             
                             if (isAdmin) {
                               return (
@@ -1033,14 +1049,16 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                                   title={`${isGranted ? '✅ ATIVADA - Clique para desativar' : '⭕ DESATIVADA - Clique para ATIVAR'} a permissão "${perm.label}"`}
                                   className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border transition-all flex items-center space-x-1 cursor-pointer active:scale-95 ${
                                     isGranted
-                                      ? isMarmita
-                                        ? 'bg-orange-100 text-orange-950 border-orange-400 shadow-2xs hover:bg-orange-200 ring-1 ring-orange-500/30'
-                                        : 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs hover:bg-emerald-100 hover:border-emerald-400'
+                                      ? isPhotos
+                                        ? 'bg-amber-100 text-amber-950 border-amber-400 shadow-2xs hover:bg-amber-200 ring-1 ring-amber-500/30'
+                                        : isMarmita
+                                          ? 'bg-orange-100 text-orange-950 border-orange-400 shadow-2xs hover:bg-orange-200 ring-1 ring-orange-500/30'
+                                          : 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs hover:bg-emerald-100 hover:border-emerald-400'
                                       : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-300'
                                   }`}
                                 >
                                   {isGranted ? (
-                                    <Check className={`w-3 h-3 ${isMarmita ? 'text-orange-700' : 'text-emerald-600'} shrink-0 stroke-[3]`} />
+                                    <Check className={`w-3 h-3 ${isPhotos ? 'text-amber-800' : isMarmita ? 'text-orange-700' : 'text-emerald-600'} shrink-0 stroke-[3]`} />
                                   ) : (
                                     <X className="w-3 h-3 text-slate-400 shrink-0" />
                                   )}
@@ -1057,14 +1075,16 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                                 title={`Permissão: "${perm.label}" - ${isGranted ? 'Concedida' : 'Bloqueada'} (Somente Administrador pode alterar)`}
                                 className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center space-x-1 cursor-pointer ${
                                   isGranted
-                                    ? isMarmita
-                                      ? 'bg-orange-100 text-orange-950 border-orange-300'
-                                      : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    ? isPhotos
+                                      ? 'bg-amber-100 text-amber-950 border-amber-300'
+                                      : isMarmita
+                                        ? 'bg-orange-100 text-orange-950 border-orange-300'
+                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                     : 'bg-slate-50 text-slate-400 border-slate-200 opacity-60'
                                 }`}
                               >
                                 {isGranted ? (
-                                  <Check className={`w-3 h-3 ${isMarmita ? 'text-orange-700' : 'text-emerald-600'} shrink-0 stroke-[3]`} />
+                                  <Check className={`w-3 h-3 ${isPhotos ? 'text-amber-800' : isMarmita ? 'text-orange-700' : 'text-emerald-600'} shrink-0 stroke-[3]`} />
                                 ) : (
                                   <X className="w-3 h-3 text-slate-400 shrink-0" />
                                 )}
@@ -1974,7 +1994,7 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                      PIN de Acesso Rápido (4 Dígitos) <span className="text-rose-500">*</span>
+                      PIN de Acesso Rápido (3 a 8 Dígitos) <span className="text-rose-500">*</span>
                     </label>
                     <button
                       type="button"
@@ -1986,11 +2006,11 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
                   </div>
                   <input
                     type="text"
-                    maxLength={6}
+                    maxLength={8}
                     required
-                    placeholder="Ex: 1234"
+                    placeholder="Ex: 12345678"
                     value={formData.pin}
-                    onChange={(e) => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '') })}
+                    onChange={(e) => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '').slice(0, 8) })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                   />
                   {formErrors.pin && <p className="text-xs text-rose-600 font-bold">{formErrors.pin}</p>}
@@ -2227,16 +2247,16 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
               {switchTargetUser && (
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Digite seu PIN de 4 dígitos:
+                    Digite seu PIN de 3 a 8 dígitos:
                   </label>
                   <input
                     type="password"
-                    maxLength={6}
+                    maxLength={8}
                     autoFocus
-                    placeholder="••••"
+                    placeholder="PIN (3 a 8 dígitos)"
                     value={enteredPin}
                     onChange={(e) => {
-                      setEnteredPin(e.target.value);
+                      setEnteredPin(e.target.value.slice(0, 8));
                       setPinError('');
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-xl font-mono tracking-widest font-black focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"

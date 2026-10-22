@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   TabType, Product, StockItem, Order, CashShift, OrderStatus, MeatPoint, PaymentMethod, PaymentSplit, OrderItem, AppUser,
   SystemLog, LogCategory, LogActionType, hasPermission, getTabRequiredPermission, getTabTitle, getDefaultTabForUser,
-  SystemModule, MarmitaOrder, MarmitaOrderStatus, MarmitaSizeConfig, MarmitaOption, MarmitaSettings
+  SystemModule, MarmitaOrder, MarmitaOrderStatus, MarmitaSizeConfig, MarmitaOption, MarmitaSettings,
+  canUserManagePhotos
 } from './types';
 import { 
   loadProducts, saveProducts, 
@@ -40,7 +41,6 @@ import { StartupScreen } from './components/StartupScreen';
 import { ReceiptModal } from './components/ReceiptModal';
 import { AccessDeniedView } from './components/AccessDeniedView';
 import { CustomerMenu } from './components/CustomerMenu';
-import { LogoCustomizerModal } from './components/LogoCustomizerModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('caixa');
@@ -77,14 +77,8 @@ export default function App() {
   const [marmitaOptions, setMarmitaOptions] = useState<MarmitaOption[]>(() => loadMarmitaOptions());
   const [marmitariaSettings, setMarmitariaSettings] = useState<MarmitaSettings>(() => loadMarmitaSettings());
 
-  // Maresia Logo State
-  const [logo, setLogo] = useState<string>(() => loadMaresiaLogo());
-  const [isLogoModalOpen, setIsLogoModalOpen] = useState<boolean>(false);
-
-  const handleLogoChange = (newLogo: string) => {
-    setLogo(newLogo);
-    saveMaresiaLogo(newLogo);
-  };
+  // Logo oficial fixa do Maresia (carregada diretamente do repositório GitHub)
+  const logo = loadMaresiaLogo();
 
   // Authentication State: Require password/PIN entry on terminal start
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -1201,9 +1195,8 @@ export default function App() {
         users={users}
         onLoginSuccess={handleLoginSuccess}
         onLogFailedAttempt={handleLogFailedAttempt}
-        logo={logo}
-        onLogoChange={handleLogoChange}
         onAddUser={handleAddUser}
+        logo={logo}
       />
     );
   }
@@ -1212,23 +1205,14 @@ export default function App() {
   // If permitted, displays BOTH modules. If not permitted, displays ONLY 1 module!
   if (showStartupScreen) {
     return (
-      <>
-        <StartupScreen
-          currentUser={currentUser}
-          activeOrdersCount={activeOrdersCount}
-          marmitaOrdersCount={activeMarmitasCount}
-          onSelectSystem={handleStartupSelectSystem}
-          onLogout={handleLogout}
-          logo={logo}
-          onOpenLogoModal={() => setIsLogoModalOpen(true)}
-        />
-        <LogoCustomizerModal
-          isOpen={isLogoModalOpen}
-          onClose={() => setIsLogoModalOpen(false)}
-          currentLogo={logo}
-          onLogoChange={handleLogoChange}
-        />
-      </>
+      <StartupScreen
+        currentUser={currentUser}
+        activeOrdersCount={activeOrdersCount}
+        marmitaOrdersCount={activeMarmitasCount}
+        onSelectSystem={handleStartupSelectSystem}
+        onLogout={handleLogout}
+        logo={logo}
+      />
     );
   }
 
@@ -1252,7 +1236,6 @@ export default function App() {
         marmitaOrdersCount={activeMarmitasCount}
         onOpenModuleSelectModal={() => setShowStartupScreen(true)}
         logo={logo}
-        onOpenLogoModal={() => setIsLogoModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -1456,14 +1439,6 @@ export default function App() {
       <ReceiptModal
         order={receiptOrder}
         onClose={() => setReceiptOrder(null)}
-      />
-
-      {/* Logo Customizer Modal */}
-      <LogoCustomizerModal
-        isOpen={isLogoModalOpen}
-        onClose={() => setIsLogoModalOpen(false)}
-        currentLogo={logo}
-        onLogoChange={handleLogoChange}
       />
     </div>
   );

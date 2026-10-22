@@ -119,18 +119,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo & Brand */}
           <div className="flex items-center space-x-2.5 sm:space-x-3">
-            <div 
-              onClick={onOpenLogoModal}
-              className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shrink-0 cursor-pointer border border-slate-700 bg-[#1e2749] flex items-center justify-center transition-transform hover:scale-105"
-              title="Clique para trocar a logo do Maresia"
-            >
-              {logo ? (
-                <img src={logo} alt="Maresia Logo" className="w-full h-full object-cover" />
-              ) : currentModule === 'marmitaria' ? (
-                <ChefHat className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              ) : (
-                <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-white fill-white/20 animate-pulse" />
-              )}
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shrink-0 border border-slate-700 bg-[#1e2749] flex items-center justify-center select-none">
+              <img 
+                src={logo || '/logo/logo.svg'} 
+                alt="Maresia Logo" 
+                onError={(e) => {
+                  e.currentTarget.src = '/logo/logo.svg';
+                }}
+                className="w-full h-full object-cover" 
+              />
             </div>
             <div>
               <div className="flex items-center space-x-2">
@@ -436,49 +433,60 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Tab 8: Configurações (Dropdown: Somente Equipe & Usuários e Auditoria) */}
-            <div className="relative shrink-0" ref={settingsDropdownRef}>
+            {/* Tab 8: Configurações (Abre diretamente a aba de Configurações & Usuários) */}
+            <div className="relative shrink-0 flex items-center" ref={settingsDropdownRef}>
               <button
                 type="button"
-                onClick={() => setIsDesktopSettingsOpen((prev) => !prev)}
+                onClick={() => {
+                  setActiveTab('usuarios');
+                  setIsDesktopSettingsOpen(false);
+                }}
                 className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap cursor-pointer shrink-0 active:scale-95 ${
-                  isSettingsTabActive || isDesktopSettingsOpen
+                  isSettingsTabActive
                     ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-xs'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                 }`}
-                title="Configurações (Equipe & Auditoria)"
+                title="Configurações do Sistema"
               >
-                <Settings className={`w-4 h-4 transition-transform ${isDesktopSettingsOpen ? 'rotate-90 text-amber-400' : isSettingsTabActive ? 'text-amber-400' : 'text-slate-400'}`} />
+                <Settings className={`w-4 h-4 ${isSettingsTabActive ? 'text-amber-400' : 'text-slate-400'}`} />
                 <span>Configurações</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isDesktopSettingsOpen ? 'rotate-180 text-amber-400' : 'text-slate-400'}`} />
                 {isSettingsTabActive && (
                   <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-slate-900 animate-pulse" />
                 )}
               </button>
 
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDesktopSettingsOpen((prev) => !prev);
+                }}
+                className={`p-1.5 ml-0.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition cursor-pointer ${
+                  isDesktopSettingsOpen ? 'text-amber-400 bg-slate-800' : ''
+                }`}
+                title="Opções de Configuração"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isDesktopSettingsOpen ? 'rotate-180 text-amber-400' : 'text-slate-400'}`} />
+              </button>
+
               {/* Popover Dropdown Menu */}
               {isDesktopSettingsOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl p-2 z-50 space-y-1.5 animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl p-2 z-50 space-y-1.5 animate-in fade-in zoom-in-95 duration-150">
                   <div className="px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-800 flex items-center justify-between">
                     <span>Configurações</span>
-                    <span className="text-amber-400 font-bold">2 módulos</span>
+                    <span className="text-amber-400 font-bold">Acesso Rápido</span>
                   </div>
 
                   {/* Opção 1: Equipe & Usuários */}
                   <button
                     type="button"
                     onClick={() => {
-                      if (canAccessUsuarios) {
-                        setActiveTab('usuarios');
-                        setIsDesktopSettingsOpen(false);
-                      }
+                      setActiveTab('usuarios');
+                      setIsDesktopSettingsOpen(false);
                     }}
-                    disabled={!canAccessUsuarios}
                     className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer ${
                       activeTab === 'usuarios'
                         ? 'bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30'
-                        : !canAccessUsuarios
-                        ? 'text-slate-500 opacity-50 cursor-not-allowed'
                         : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
                     }`}
                   >
@@ -487,28 +495,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <Users className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-bold leading-tight">Equipe & Usuários</p>
-                        <p className="text-[10px] text-slate-400">Permissões e acessos</p>
+                        <p className="text-xs font-bold leading-tight">Configurações & Equipe</p>
+                        <p className="text-[10px] text-slate-400">Permissões e dados</p>
                       </div>
                     </div>
-                    {!canAccessUsuarios && <Lock className="w-3.5 h-3.5 text-purple-400/80" />}
                   </button>
 
                   {/* Opção 2: Auditoria & Logs */}
                   <button
                     type="button"
                     onClick={() => {
-                      if (canAccessAuditoria) {
-                        setActiveTab('auditoria');
-                        setIsDesktopSettingsOpen(false);
-                      }
+                      setActiveTab('auditoria');
+                      setIsDesktopSettingsOpen(false);
                     }}
-                    disabled={!canAccessAuditoria}
                     className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer ${
                       activeTab === 'auditoria'
                         ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30'
-                        : !canAccessAuditoria
-                        ? 'text-slate-500 opacity-50 cursor-not-allowed'
                         : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
                     }`}
                   >
@@ -521,7 +523,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <p className="text-[10px] text-slate-400">Trilha de segurança</p>
                       </div>
                     </div>
-                    {!canAccessAuditoria && <Lock className="w-3.5 h-3.5 text-rose-400/80" />}
                   </button>
                 </div>
               )}
@@ -621,7 +622,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
 
                 <p className="text-xs text-slate-400">
-                  Digite o PIN de 4 dígitos para assumir o terminal como <strong>{pinPromptUser.name}</strong> ({ROLE_CONFIG[pinPromptUser.role]?.label}):
+                  Digite a senha/PIN (3 a 8 dígitos) para assumir o terminal como <strong>{pinPromptUser.name}</strong> ({ROLE_CONFIG[pinPromptUser.role]?.label}):
                 </p>
 
                 {pinError && (
@@ -633,13 +634,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div>
                   <input
                     type="password"
-                    maxLength={6}
+                    maxLength={8}
                     value={enteredPin}
                     onChange={(e) => {
-                      setEnteredPin(e.target.value);
+                      setEnteredPin(e.target.value.slice(0, 8));
                       setPinError(null);
                     }}
-                    placeholder="PIN de 4 dígitos"
+                    placeholder="PIN (3 a 8 dígitos)"
                     className="w-full text-center tracking-[0.4em] font-mono text-2xl py-3 rounded-xl bg-slate-950 border border-slate-700 text-amber-400 focus:outline-none focus:border-amber-400"
                     autoFocus
                   />
@@ -944,28 +945,27 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Mobile Tab 7: Engrenagem (Configurações: Somente Equipe & Auditoria) */}
+            {/* Mobile Tab 7: Engrenagem (Configurações) */}
             <button
-              onClick={() => setIsMoreMenuOpen(true)}
+              onClick={() => {
+                setActiveTab('usuarios');
+                setIsMoreMenuOpen(false);
+              }}
               className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all cursor-pointer active:scale-95 relative min-w-0 ${
-                isSettingsTabActive || isMoreMenuOpen
+                isSettingsTabActive
                   ? 'bg-slate-800/90 text-amber-400 font-extrabold shadow-2xs border border-amber-500/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
-              title="Configurações (Equipe & Auditoria)"
+              title="Configurações do Sistema"
             >
               <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
-                <Settings className={`w-4 h-4 transition-transform ${isMoreMenuOpen ? 'rotate-90 text-amber-400' : isSettingsTabActive ? 'text-amber-400' : 'text-slate-400'}`} />
+                <Settings className={`w-4 h-4 ${isSettingsTabActive ? 'text-amber-400' : 'text-slate-400'}`} />
                 {isSettingsTabActive && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-slate-900 animate-pulse" />
                 )}
               </div>
               <span className="text-[8px] font-extrabold leading-none mt-1 truncate w-full text-center">
-                {activeTab === 'usuarios'
-                  ? 'Equipe'
-                  : activeTab === 'auditoria'
-                  ? 'Auditoria'
-                  : 'Ajustes'}
+                Config
               </span>
             </button>
           </>
@@ -1014,17 +1014,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* 1. Equipe & Usuários */}
               <button
                 onClick={() => {
-                  if (canAccessUsuarios) {
-                    setActiveTab('usuarios');
-                    setIsMoreMenuOpen(false);
-                  }
+                  setActiveTab('usuarios');
+                  setIsMoreMenuOpen(false);
                 }}
-                disabled={!canAccessUsuarios}
                 className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer text-left ${
                   activeTab === 'usuarios'
                     ? 'bg-purple-500/15 border-purple-500/40 text-white ring-1 ring-purple-500/30'
-                    : !canAccessUsuarios
-                    ? 'bg-slate-800/30 border-slate-800/60 text-slate-500 cursor-not-allowed opacity-60'
                     : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/70 text-slate-200 hover:text-white active:scale-98'
                 }`}
               >
@@ -1035,7 +1030,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div>
                     <div className="flex items-center space-x-1.5">
                       <span className="font-black text-sm">Equipe & Usuários</span>
-                      {!canAccessUsuarios && <Lock className="w-3.5 h-3.5 text-purple-400/80" />}
                     </div>
                     <p className="text-xs text-slate-400">Cargos, permissões e cadastro de operadores</p>
                   </div>
@@ -1053,17 +1047,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* 2. Auditoria & Histórico */}
               <button
                 onClick={() => {
-                  if (canAccessAuditoria) {
-                    setActiveTab('auditoria');
-                    setIsMoreMenuOpen(false);
-                  }
+                  setActiveTab('auditoria');
+                  setIsMoreMenuOpen(false);
                 }}
-                disabled={!canAccessAuditoria}
                 className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer text-left ${
                   activeTab === 'auditoria'
                     ? 'bg-rose-500/15 border-rose-500/40 text-white ring-1 ring-rose-500/30'
-                    : !canAccessAuditoria
-                    ? 'bg-slate-800/30 border-slate-800/60 text-slate-500 cursor-not-allowed opacity-60'
                     : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/70 text-slate-200 hover:text-white active:scale-98'
                 }`}
               >

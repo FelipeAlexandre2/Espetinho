@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AppUser, SystemModule, DEFAULT_ROLE_PERMISSIONS } from '../types';
 import { 
-  User, Lock, Eye, EyeOff, AlertCircle, Camera, ShieldCheck, X, 
+  User, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, X, 
   UserPlus, CheckCircle2, KeyRound
 } from 'lucide-react';
-import { LogoCustomizerModal } from './LogoCustomizerModal';
-import { DEFAULT_MARESIA_LOGO, loadMaresiaLogo, saveMaresiaLogo, saveUsers } from '../lib/storage';
+import { SYSTEM_LOGO_PATH, saveUsers } from '../lib/storage';
 
 interface LoginScreenProps {
   users: AppUser[];
@@ -13,22 +12,19 @@ interface LoginScreenProps {
   onLogFailedAttempt?: (attemptedEmail: string, reason: string) => void;
   currentModule?: SystemModule;
   onSelectModule?: (module: SystemModule) => void;
-  logo?: string;
-  onLogoChange?: (newLogo: string) => void;
   onAddUser?: (user: AppUser) => void;
+  logo?: string;
 }
 
 export function LoginScreen({ 
   users, 
   onLoginSuccess, 
   onLogFailedAttempt,
-  logo: initialLogo,
-  onLogoChange,
-  onAddUser
+  onAddUser,
+  logo
 }: LoginScreenProps) {
   const activeUsers = (users || []).filter((u) => u && u.status === 'ativo');
   
-  const [logo, setLogo] = useState<string>(() => initialLogo || loadMaresiaLogo());
   const [usernameInput, setUsernameInput] = useState<string>(() => {
     return localStorage.getItem('maresia_saved_username') || '';
   });
@@ -40,7 +36,6 @@ export function LoginScreen({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [suggestCreateUser, setSuggestCreateUser] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showLogoModal, setShowLogoModal] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
 
   // Form state for creating/customizing a user
@@ -72,19 +67,6 @@ export function LoginScreen({
         fullName.includes(trimmed)
       );
     }) || null;
-  };
-
-  // Sync logo when initialLogo changes
-  useEffect(() => {
-    if (initialLogo && initialLogo !== logo) {
-      setLogo(initialLogo);
-    }
-  }, [initialLogo]);
-
-  const handleUpdateLogo = (newLogo: string) => {
-    setLogo(newLogo);
-    saveMaresiaLogo(newLogo);
-    if (onLogoChange) onLogoChange(newLogo);
   };
 
   // Keyboard navigation
@@ -156,6 +138,18 @@ export function LoginScreen({
       return;
     }
 
+    if (pinCode.length < 3) {
+      setErrorMessage('A senha/PIN deve ter no mínimo 3 dígitos.');
+      document.getElementById('input-login-pin')?.focus();
+      return;
+    }
+
+    if (pinCode.length > 8) {
+      setErrorMessage('A senha/PIN deve ter no máximo 8 dígitos.');
+      document.getElementById('input-login-pin')?.focus();
+      return;
+    }
+
     const targetPin = targetUser.pin || '1234';
     if (targetUser.pin === pinCode || targetUser.password === pinCode || pinCode === '1234' || pinCode === 'admin123') {
       if (rememberUsername) {
@@ -203,11 +197,15 @@ export function LoginScreen({
       return;
     }
     if (!cleanPin) {
-      setModalError('Informe uma senha/PIN numérico de 4 a 8 dígitos.');
+      setModalError('Informe uma senha/PIN numérico de 3 a 8 dígitos.');
       return;
     }
-    if (cleanPin.length < 4) {
-      setModalError('A senha/PIN deve ter no mínimo 4 dígitos.');
+    if (cleanPin.length < 3) {
+      setModalError('A senha/PIN deve ter no mínimo 3 dígitos.');
+      return;
+    }
+    if (cleanPin.length > 8) {
+      setModalError('A senha/PIN deve ter no máximo 8 dígitos.');
       return;
     }
     if (cleanPin !== newPinConfirm.trim()) {
@@ -269,39 +267,21 @@ export function LoginScreen({
       <div className="absolute top-1/4 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Main Login Card - Exactly like user's reference image, strictly without showing available users */}
+      {/* Main Login Card - Clean and permanent: Logo fixed from GitHub path, no buttons to change it */}
       <div className="w-full max-w-sm sm:max-w-[400px] bg-white rounded-[32px] p-7 sm:p-8 shadow-2xl border border-slate-100 flex flex-col items-center relative z-10 animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Circular Logo Badge with Camera Button */}
-        <div className="relative group -mt-3 mb-4">
-          <div 
-            onClick={() => setShowLogoModal(true)}
-            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shadow-xl ring-4 ring-slate-100 bg-[#1e2749] flex items-center justify-center transition-all duration-200 group-hover:scale-105 cursor-pointer relative"
-          >
+        {/* Circular Logo Badge (Fixed from GitHub: /logo/logo.png - Nobody can change it from the UI) */}
+        <div className="-mt-3 mb-4 select-none">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shadow-xl ring-4 ring-slate-100 bg-[#1e2749] flex items-center justify-center">
             <img 
-              src={logo} 
+              src={logo || SYSTEM_LOGO_PATH} 
               alt="Maresia Logo" 
               onError={(e) => {
-                e.currentTarget.src = DEFAULT_MARESIA_LOGO;
+                e.currentTarget.src = '/logo/logo.svg';
               }}
               className="w-full h-full object-cover rounded-full"
             />
-            {/* Hover overlay to change logo */}
-            <div className="absolute inset-0 bg-slate-950/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[10px] font-bold">
-              <Camera className="w-5 h-5 mb-0.5 text-amber-400" />
-              <span>Trocar Logo</span>
-            </div>
           </div>
-
-          {/* Orange Camera Badge at bottom-right of circle */}
-          <button
-            type="button"
-            onClick={() => setShowLogoModal(true)}
-            title="Clique para colocar ou alterar a logo do cliente"
-            className="absolute -bottom-1 -right-1 p-2 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition cursor-pointer active:scale-95 group-hover:scale-110"
-          >
-            <Camera className="w-3.5 h-3.5" />
-          </button>
         </div>
 
         {/* Title & Subtitle */}
@@ -390,13 +370,14 @@ export function LoginScreen({
               <input
                 id="input-login-pin"
                 type={showPassword ? 'text' : 'password'}
+                maxLength={8}
                 value={pinCode}
                 onChange={(e) => {
-                  setPinCode(e.target.value);
+                  setPinCode(e.target.value.slice(0, 8));
                   setErrorMessage(null);
                 }}
                 onKeyDown={(e) => handleKeyDown(e, 'password')}
-                placeholder="Digite sua senha ou PIN"
+                placeholder="Senha ou PIN (3 a 8 dígitos)"
                 autoComplete="current-password"
                 className="w-full pl-11 pr-11 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:bg-white focus:border-[#7e859b] focus:ring-4 focus:ring-slate-200 transition shadow-inner/5"
               />
@@ -524,7 +505,7 @@ export function LoginScreen({
           </div>
         </div>
 
-        {/* Clear Option Button to Add or Put User Name */}
+        {/* Option Button to Add or Put User Name */}
         <div className="w-full mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-center">
           <button
             type="button"
@@ -542,14 +523,6 @@ export function LoginScreen({
         <ShieldCheck className="w-4 h-4 text-emerald-400" />
         <span>Terminal Seguro Maresia</span>
       </footer>
-
-      {/* Logo Customizer Modal */}
-      <LogoCustomizerModal
-        isOpen={showLogoModal}
-        onClose={() => setShowLogoModal(false)}
-        currentLogo={logo}
-        onLogoChange={handleUpdateLogo}
-      />
 
       {/* Modal: Opção para Colocar / Cadastrar Nome de Usuário */}
       {showAddUserModal && (
@@ -638,7 +611,7 @@ export function LoginScreen({
                       setNewPin(e.target.value);
                       setModalError(null);
                     }}
-                    placeholder="Mínimo 4 dígitos"
+                    placeholder="3 a 8 dígitos"
                     className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-amber-500 focus:bg-white"
                   />
                 </div>

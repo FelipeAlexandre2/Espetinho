@@ -1,20 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  MarmitaSize, MarmitaSizeConfig, MarmitaOption, MarmitaOptionCategory,
-  MarmitaItem, MarmitaOrder, MarmitaOrderStatus, MarmitaDeliveryType, MarmitaSettings,
-  PaymentMethod, AppUser, hasPermission
+  MarmitaSize, MarmitaSizeConfig, MarmitaOption, MarmitaItem, 
+  MarmitaOrder, MarmitaOrderStatus, MarmitaDeliveryType, MarmitaSettings,
+  PaymentMethod, AppUser, MarmitaDailyMenu, DayOfWeekKey
 } from '../types';
 import { 
-  generateMarmitaLabelHtml, printMarmitaThermalDirect, formatMarmitaWhatsAppText,
+  printMarmitaThermalDirect, formatMarmitaWhatsAppText,
   MarmitaLabelMode, MarmitaPaperWidth, MarmitaFontSize
 } from '../utils/printMarmita';
 import { 
+  loadMarmitaDailyMenus, saveMarmitaDailyMenus, getTodayDayOfWeekKey 
+} from '../lib/storage';
+import { 
   Utensils, Plus, Minus, Trash2, CheckCircle2, Clock, 
   Motorbike, ShoppingBag, MapPin, Phone, MessageSquare, 
-  Printer, Search, Filter, Sparkles, AlertCircle, DollarSign, 
-  Calendar, Layers, Check, Edit2, Copy, ArrowRight,
-  ChevronRight, RefreshCw, ChefHat, Tag, PackageCheck, Send,
-  Smartphone, ZoomIn
+  Printer, Search, DollarSign, Calendar, Check, ArrowRight,
+  ChefHat, Tag, Send, Sparkles, Copy, Edit3, Save, Share2
 } from 'lucide-react';
 
 interface MarmitariaTabProps {
@@ -35,7 +36,7 @@ interface MarmitariaTabProps {
 
 export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
   currentUser,
-  sizes,
+  sizes: propSizes,
   options,
   orders,
   settings,
@@ -43,75 +44,365 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
   onUpdateOptions,
   onCreateOrder,
   onUpdateOrderStatus,
-  onUpdateOrder,
   onDeleteOrder,
-  onUpdateSettings,
   onSwitchToEspetos
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'montar' | 'pedidos' | 'cardapio_dia' | 'relatorios' | 'config'>('montar');
+  // Navigation: 3 clean tabs
+  const [activeTab, setActiveTab] = useState<'novo_pedido' | 'fila_kds' | 'cardapio_dia'>('novo_pedido');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Helper Toast
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3500);
+    }, 3200);
   };
 
   /* =========================================================================
-   * STATE: BUILDER / MONTAGEM DE MARMITA
+   * SIZES: Strictly PEQUENA (P), MÉDIA (M), GRANDE (G)
+   * ========================================================================= */
+  const cleanSizes = useMemo(() => {
+    const list = propSizes.filter((s) => s.size === 'P' || s.size === 'M' || s.size === 'G');
+    if (list.length > 0) return list;
+    return [
+      {
+        size: 'P' as MarmitaSize,
+        name: 'Marmita Pequena (P)',
+        label: 'Pequena (P)',
+        price: 16.00,
+        maxProteins: 1,
+        maxSides: 2,
+        description: '1 carne + arroz, feijão e acompanhamentos',
+        badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300'
+      },
+      {
+        size: 'M' as MarmitaSize,
+        name: 'Marmita Média (M)',
+        label: 'Média (M)',
+        price: 20.00,
+        maxProteins: 1,
+        maxSides: 3,
+        description: 'Tamanho mais pedido. 1 carne caprichada + guarnições',
+        badgeColor: 'bg-blue-50 text-blue-800 border-blue-300'
+      },
+      {
+        size: 'G' as MarmitaSize,
+        name: 'Marmita Grande (G)',
+        label: 'Grande (G)',
+        price: 25.00,
+        maxProteins: 2,
+        maxSides: 4,
+        description: 'Porção reforçada. Até 2 carnes generosas + guarnições',
+        badgeColor: 'bg-amber-50 text-amber-800 border-amber-300'
+      }
+    ];
+  }, [propSizes]);
+
+  /* =========================================================================
+   * DAILY MENUS: Campo para cadastrar o cardápio de cada dia
+   * ========================================================================= */
+  const [dailyMenus, setDailyMenus] = useState<MarmitaDailyMenu[]>(() => loadMarmitaDailyMenus());
+  const todayKey = useMemo(() => getTodayDayOfWeekKey(), []);
+  const [selectedDayKey, setSelectedDayKey] = useState<DayOfWeekKey>(todayKey);
+
+  // Form inputs for selected day's menu
+  const activeMenu = useMemo(() => {
+    return dailyMenus.find((m) => m.dayKey === selectedDayKey) || dailyMenus[0];
+  }, [dailyMenus, selectedDayKey]);
+
+  const [editCarnes, setEditCarnes] = useState<string>('');
+  const [editAcompanhamentos, setEditAcompanhamentos] = useState<string>('');
+  const [editDestaque, setEditDestaque] = useState<string>('');
+  const [editObservacoes, setEditObservacoes] = useState<string>('');
+
+  // Sync edit fields when changing day
+  useEffect(() => {
+    if (activeMenu) {
+      setEditCarnes(activeMenu.carnes.join(', '));
+      setEditAcompanhamentos(activeMenu.acompanhamentos.join(', '));
+      setEditDestaque(activeMenu.destaquePrato || '');
+      setEditObservacoes(activeMenu.observacoes || '');
+    }
+  }, [activeMenu]);
+
+  // Today's active menu in PDV
+  const todayMenu = useMemo(() => {
+    return dailyMenus.find((m) => m.dayKey === todayKey) || dailyMenus[0];
+  }, [dailyMenus, todayKey]);
+
+  const handleSaveDayMenu = () => {
+    const carnesList = editCarnes
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const acompanhamentosList = editAcompanhamentos
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const updated = dailyMenus.map((m) => {
+      if (m.dayKey === selectedDayKey) {
+        return {
+          ...m,
+          carnes: carnesList.length > 0 ? carnesList : ['Bife Acebolado', 'Frango Grelhado'],
+          acompanhamentos: acompanhamentosList.length > 0 ? acompanhamentosList : ['Arroz Branco', 'Feijão Carioca', 'Farofa'],
+          destaquePrato: editDestaque.trim() || undefined,
+          observacoes: editObservacoes.trim() || undefined,
+        };
+      }
+      return m;
+    });
+
+    setDailyMenus(updated);
+    saveMarmitaDailyMenus(updated);
+    showToast(`✅ Cardápio de ${activeMenu?.dayLabel || selectedDayKey} salvo com sucesso!`);
+  };
+
+  // Copy WhatsApp Formatted Daily Menu
+  const handleCopyWhatsAppMenu = (menuToCopy = activeMenu) => {
+    if (!menuToCopy) return;
+
+    const priceP = cleanSizes.find((s) => s.size === 'P')?.price || 16.00;
+    const priceM = cleanSizes.find((s) => s.size === 'M')?.price || 20.00;
+    const priceG = cleanSizes.find((s) => s.size === 'G')?.price || 25.00;
+
+    let text = `*🍱 CARDÁPIO DE HOJE — ${menuToCopy.dayLabel.toUpperCase()}*\n`;
+    text += `*${settings.restaurantName || 'Maresia Gastronomia'}*\n\n`;
+
+    if (menuToCopy.destaquePrato) {
+      text += `⭐ *DESTAQUE DO DIA:*\n${menuToCopy.destaquePrato}\n\n`;
+    }
+
+    text += `🥩 *OPÇÕES DE CARNES:*\n`;
+    menuToCopy.carnes.forEach((c) => {
+      text += `• ${c}\n`;
+    });
+
+    text += `\n🥗 *ACOMPANHAMENTOS:*\n`;
+    menuToCopy.acompanhamentos.forEach((a) => {
+      text += `• ${a}\n`;
+    });
+
+    text += `\n📦 *TAMANHOS E VALORES:*\n`;
+    text += `• *Pequena (P):* R$ ${priceP.toFixed(2).replace('.', ',')} (1 carne)\n`;
+    text += `• *Média (M):* R$ ${priceM.toFixed(2).replace('.', ',')} (1 carne)\n`;
+    text += `• *Grande (G):* R$ ${priceG.toFixed(2).replace('.', ',')} (até 2 carnes)\n\n`;
+
+    if (menuToCopy.observacoes) {
+      text += `💡 _${menuToCopy.observacoes}_\n\n`;
+    }
+
+    text += `🛵 *Faça seu pedido pelo WhatsApp:*\n${settings.phoneWhatsapp || ''}`;
+
+    navigator.clipboard.writeText(text);
+    showToast('📋 Cardápio copiado! Pronto para colar no WhatsApp!');
+  };
+
+  /* =========================================================================
+   * BUILDER / MONTAGEM RÁPIDA DE MARMITA (PDV ÁGIL)
    * ========================================================================= */
   const [selectedSize, setSelectedSize] = useState<MarmitaSize>('M');
-  const [selectedBases, setSelectedBases] = useState<string[]>(['Arroz Branco Soltinho']);
-  const [selectedFeijoes, setSelectedFeijoes] = useState<string[]>(['Feijão Carioca da Casa (Caldo Grosso)']);
   const [selectedProteinas, setSelectedProteinas] = useState<string[]>([]);
-  const [selectedGuarnicoes, setSelectedGuarnicoes] = useState<string[]>([]);
-  const [selectedSaladas, setSelectedSaladas] = useState<string[]>([]);
-  const [selectedAdicionais, setSelectedAdicionais] = useState<{ name: string; price: number }[]>([]);
+  const [selectedBases, setSelectedBases] = useState<string[]>(['Arroz Branco']);
+  const [selectedFeijoes, setSelectedFeijoes] = useState<string[]>(['Feijão Carioca']);
+  const [selectedSides, setSelectedSides] = useState<string[]>(['Farofa']);
   const [marmitaNotes, setMarmitaNotes] = useState('');
   const [marmitaQuantity, setMarmitaQuantity] = useState(1);
 
-  // Cart / Assembled Marmitas List in active order
-  const [assembledItems, setAssembledItems] = useState<MarmitaItem[]>([]);
-  const [selectedBeverages, setSelectedBeverages] = useState<{ id: string; name: string; price: number; quantity: number }[]>([]);
+  // Cart for current order
+  const [cartItems, setCartItems] = useState<MarmitaItem[]>([]);
 
   // Customer & Delivery form
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [deliveryType, setDeliveryType] = useState<MarmitaDeliveryType>('entrega');
-  const [tableOrAddress, setTableOrAddress] = useState('');
+  const [deliveryType, setDeliveryType] = useState<MarmitaDeliveryType>('balcao');
+  const [addressOrTable, setAddressOrTable] = useState('');
   const [deliveryFee, setDeliveryFee] = useState<number>(settings.defaultDeliveryFee || 5.00);
-  const [discount, setDiscount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
   const [isPaid, setIsPaid] = useState<boolean>(true);
-  const [changeFor, setChangeFor] = useState<string>('');
-  const [orderGeneralNotes, setOrderGeneralNotes] = useState('');
 
-  // Selected Order for Label Thermal Print Modal
+  // Selected Order for Printing
   const [printOrderModal, setPrintOrderModal] = useState<MarmitaOrder | null>(null);
-  const [labelMode, setLabelMode] = useState<MarmitaLabelMode>('tampa');
-  const [labelPaperWidth, setLabelPaperWidth] = useState<MarmitaPaperWidth>('80mm');
-  const [labelFontSize, setLabelFontSize] = useState<MarmitaFontSize>('grande');
-  const [labelSelectedItemIndex, setLabelSelectedItemIndex] = useState<number | 'all'>('all');
   const [isPrintingLabel, setIsPrintingLabel] = useState(false);
 
-  const handlePrintMarmitaLabel = async () => {
+  // KDS search and filter
+  const [orderSearch, setOrderSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
+
+  // Active Size Config
+  const currentSizeConfig = useMemo(() => {
+    return cleanSizes.find((s) => s.size === selectedSize) || cleanSizes[1] || cleanSizes[0];
+  }, [cleanSizes, selectedSize]);
+
+  // Set default protein from today's menu if none selected
+  useEffect(() => {
+    if (selectedProteinas.length === 0 && todayMenu && todayMenu.carnes.length > 0) {
+      setSelectedProteinas([todayMenu.carnes[0]]);
+    }
+  }, [todayMenu]);
+
+  // Calculate current marmita price
+  const currentMarmitaPrice = useMemo(() => {
+    let total = currentSizeConfig.price;
+    // Extra meats beyond limit: +R$ 7,00 each
+    if (selectedProteinas.length > currentSizeConfig.maxProteins) {
+      total += (selectedProteinas.length - currentSizeConfig.maxProteins) * 7.00;
+    }
+    return total;
+  }, [currentSizeConfig, selectedProteinas]);
+
+  // Order Cart Totals
+  const cartSubtotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [cartItems]);
+
+  const effectiveDeliveryFee = deliveryType === 'entrega' ? deliveryFee : 0;
+  const orderTotal = cartSubtotal + effectiveDeliveryFee;
+
+  // Toggle helpers
+  const handleToggleProtein = (name: string) => {
+    setSelectedProteinas((prev) => {
+      if (prev.includes(name)) {
+        return prev.length > 1 ? prev.filter((p) => p !== name) : prev;
+      }
+      if (prev.length < currentSizeConfig.maxProteins) {
+        return [...prev, name];
+      }
+      if (currentSizeConfig.maxProteins === 1) {
+        return [name];
+      }
+      return [...prev, name];
+    });
+  };
+
+  const handleToggleSide = (name: string) => {
+    setSelectedSides((prev) => {
+      if (prev.includes(name)) {
+        return prev.filter((s) => s !== name);
+      }
+      return [...prev, name];
+    });
+  };
+
+  // Add marmita to order cart
+  const handleAddMarmita = () => {
+    if (selectedProteinas.length === 0) {
+      showToast('⚠️ Selecione a carne para a marmita!');
+      return;
+    }
+
+    const newItem: MarmitaItem = {
+      id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      size: selectedSize,
+      sizeName: currentSizeConfig.label,
+      bases: selectedBases.length > 0 ? selectedBases : ['Arroz Branco'],
+      feijoes: selectedFeijoes.length > 0 ? selectedFeijoes : ['Feijão Carioca'],
+      proteinas: selectedProteinas,
+      guarnicoes: selectedSides,
+      saladas: [],
+      adicionais: [],
+      price: currentMarmitaPrice,
+      quantity: marmitaQuantity,
+      notes: marmitaNotes.trim() || undefined
+    };
+
+    setCartItems((prev) => [...prev, newItem]);
+    setMarmitaNotes('');
+    setMarmitaQuantity(1);
+    showToast(`✅ Marmita ${currentSizeConfig.label} adicionada!`);
+  };
+
+  // Finalize Order
+  const handleFinalizeOrder = () => {
+    const itemsToSave = [...cartItems];
+
+    // If cart is empty, automatically add the current assembled marmita
+    if (itemsToSave.length === 0) {
+      if (selectedProteinas.length === 0) {
+        showToast('⚠️ Selecione uma carne antes de confirmar o pedido!');
+        return;
+      }
+      itemsToSave.push({
+        id: `item-${Date.now()}`,
+        size: selectedSize,
+        sizeName: currentSizeConfig.label,
+        bases: selectedBases,
+        feijoes: selectedFeijoes,
+        proteinas: selectedProteinas,
+        guarnicoes: selectedSides,
+        saladas: [],
+        adicionais: [],
+        price: currentMarmitaPrice,
+        quantity: marmitaQuantity,
+        notes: marmitaNotes.trim() || undefined
+      });
+    }
+
+    const finalSubtotal = itemsToSave.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const finalFee = deliveryType === 'entrega' ? deliveryFee : 0;
+    const finalTotal = finalSubtotal + finalFee;
+
+    const newOrder: MarmitaOrder = {
+      id: `marmita-${Date.now()}`,
+      orderNumber: (orders.length > 0 ? Math.max(...orders.map((o) => o.orderNumber || 0)) : 100) + 1,
+      customerName: customerName.trim() || (deliveryType === 'balcao' ? 'Cliente Balcão' : 'Cliente Marmita'),
+      customerPhone: customerPhone.trim() || undefined,
+      deliveryType,
+      tableOrAddress: addressOrTable.trim() || undefined,
+      items: itemsToSave,
+      beverages: [],
+      subtotal: finalSubtotal,
+      deliveryFee: finalFee,
+      discount: 0,
+      total: finalTotal,
+      paymentMethod,
+      isPaid,
+      status: 'novo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    onCreateOrder(newOrder);
+    setCartItems([]);
+    setCustomerName('');
+    setCustomerPhone('');
+    setAddressOrTable('');
+    setMarmitaNotes('');
+    showToast(`🎉 Pedido #${newOrder.orderNumber} lançado com sucesso!`);
+    setPrintOrderModal(newOrder);
+  };
+
+  // Advance KDS order status
+  const handleAdvanceStatus = (order: MarmitaOrder) => {
+    let nextStatus: MarmitaOrderStatus = order.status;
+    if (order.status === 'novo') nextStatus = 'em_montagem';
+    else if (order.status === 'em_montagem') nextStatus = 'pronto_embalado';
+    else if (order.status === 'pronto_embalado') {
+      nextStatus = order.deliveryType === 'entrega' ? 'saiu_para_entrega' : 'entregue';
+    } else if (order.status === 'saiu_para_entrega') {
+      nextStatus = 'entregue';
+    }
+    onUpdateOrderStatus(order.id, nextStatus);
+  };
+
+  // Print thermal receipt
+  const handlePrint = async () => {
     if (!printOrderModal) return;
     setIsPrintingLabel(true);
     try {
       await printMarmitaThermalDirect(printOrderModal, settings, {
-        mode: labelMode,
-        paperWidth: labelPaperWidth,
-        fontSize: labelFontSize,
-        singleItemIndex: labelSelectedItemIndex,
+        mode: 'tampa',
+        paperWidth: '80mm',
+        fontSize: 'grande',
+        singleItemIndex: 'all',
       });
     } finally {
       setIsPrintingLabel(false);
     }
   };
 
-  const handleShareMarmitaWhatsApp = () => {
+  const handleShareWhatsApp = () => {
     if (!printOrderModal) return;
     const text = formatMarmitaWhatsAppText(printOrderModal, settings);
     const phone = printOrderModal.customerPhone?.replace(/\D/g, '') || '';
@@ -121,1268 +412,640 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
     window.open(url, '_blank');
   };
 
-  // Filter & Search in Pedidos tab
-  const [orderSearch, setOrderSearch] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('todos');
-  const [orderDeliveryFilter, setOrderDeliveryFilter] = useState<string>('todos');
+  const activeOrders = orders.filter((o) => o.status !== 'entregue' && o.status !== 'cancelado');
+  const filteredOrders = orders.filter((o) => {
+    const matchesSearch = 
+      orderSearch === '' ||
+      o.orderNumber.toString().includes(orderSearch) ||
+      o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) ||
+      (o.tableOrAddress && o.tableOrAddress.toLowerCase().includes(orderSearch.toLowerCase()));
 
-  // Quick motoboy prompt
-  const [motoboyModalOrder, setMotoboyModalOrder] = useState<MarmitaOrder | null>(null);
-  const [motoboyInputName, setMotoboyInputName] = useState('');
+    const matchesStatus = statusFilter === 'todos' || o.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
-  // Current selected size config
-  const currentSizeConfig = useMemo(() => {
-    return sizes.find((s) => s.size === selectedSize) || sizes[0];
-  }, [sizes, selectedSize]);
-
-  // Available options grouped by category
-  const availableOptionsByCategory = useMemo(() => {
-    const map: Record<MarmitaOptionCategory, MarmitaOption[]> = {
-      base: [],
-      feijao: [],
-      proteina: [],
-      guarnicao: [],
-      salada: [],
-      adicional: [],
-      bebida: []
-    };
-    options.forEach((opt) => {
-      if (opt.isAvailableToday) {
-        if (!map[opt.category]) map[opt.category] = [];
-        map[opt.category].push(opt);
-      }
-    });
-    return map;
-  }, [options]);
-
-  // Calculate current single box price
-  const currentBoxBasePrice = currentSizeConfig.price;
-  const currentBoxExtraPrice = useMemo(() => {
-    let extra = 0;
-    // Check extra on bases
-    selectedBases.forEach((bName) => {
-      const opt = options.find((o) => o.name === bName);
-      if (opt && opt.extraPrice > 0) extra += opt.extraPrice;
-    });
-    // Check extra on feijao
-    selectedFeijoes.forEach((fName) => {
-      const opt = options.find((o) => o.name === fName);
-      if (opt && opt.extraPrice > 0) extra += opt.extraPrice;
-    });
-    // Check extra on proteinas beyond limit or premium meat
-    selectedProteinas.forEach((pName, index) => {
-      const opt = options.find((o) => o.name === pName);
-      if (opt && opt.extraPrice > 0) extra += opt.extraPrice;
-      // If user selected more proteins than allowed in size:
-      if (index >= currentSizeConfig.maxProteins) {
-        extra += 7.00; // Extra protein fee
-      }
-    });
-    // Check adicionais
-    selectedAdicionais.forEach((adc) => {
-      extra += adc.price;
-    });
-    return extra;
-  }, [selectedBases, selectedFeijoes, selectedProteinas, selectedAdicionais, currentSizeConfig, options]);
-
-  const singleMarmitaTotalPrice = currentBoxBasePrice + currentBoxExtraPrice;
-
-  // Toggle helper for base / feijao (Single select or max 1-2)
-  const handleToggleBase = (optName: string) => {
-    setSelectedBases((prev) => (prev.includes(optName) ? [] : [optName]));
-  };
-
-  const handleToggleFeijao = (optName: string) => {
-    setSelectedFeijoes((prev) => (prev.includes(optName) ? [] : [optName]));
-  };
-
-  // Toggle for Proteina
-  const handleToggleProteina = (optName: string) => {
-    setSelectedProteinas((prev) => {
-      if (prev.includes(optName)) {
-        return prev.filter((p) => p !== optName);
-      }
-      return [...prev, optName];
-    });
-  };
-
-  // Toggle for Guarnicao
-  const handleToggleGuarnicao = (optName: string) => {
-    setSelectedGuarnicoes((prev) => {
-      if (prev.includes(optName)) {
-        return prev.filter((g) => g !== optName);
-      }
-      return [...prev, optName];
-    });
-  };
-
-  // Toggle for Salada
-  const handleToggleSalada = (optName: string) => {
-    setSelectedSaladas((prev) => {
-      if (prev.includes(optName)) {
-        return prev.filter((s) => s !== optName);
-      }
-      return [...prev, optName];
-    });
-  };
-
-  // Toggle for Adicionais
-  const handleToggleAdicional = (opt: MarmitaOption) => {
-    setSelectedAdicionais((prev) => {
-      const exists = prev.some((a) => a.name === opt.name);
-      if (exists) {
-        return prev.filter((a) => a.name !== opt.name);
-      }
-      return [...prev, { name: opt.name, price: opt.extraPrice }];
-    });
-  };
-
-  // Add Beverage
-  const handleAddBeverage = (opt: MarmitaOption) => {
-    setSelectedBeverages((prev) => {
-      const existing = prev.find((b) => b.id === opt.id);
-      if (existing) {
-        return prev.map((b) => (b.id === opt.id ? { ...b, quantity: b.quantity + 1 } : b));
-      }
-      return [...prev, { id: opt.id, name: opt.name, price: opt.extraPrice, quantity: 1 }];
-    });
-  };
-
-  const handleRemoveBeverage = (id: string) => {
-    setSelectedBeverages((prev) => {
-      const existing = prev.find((b) => b.id === id);
-      if (existing && existing.quantity > 1) {
-        return prev.map((b) => (b.id === id ? { ...b, quantity: b.quantity - 1 } : b));
-      }
-      return prev.filter((b) => b.id !== id);
-    });
-  };
-
-  // Add currently assembled Marmita to order cart
-  const handleAddMarmitaToOrderCart = () => {
-    if (selectedProteinas.length === 0) {
-      showToast('⚠️ Selecione pelo menos 1 opção de carne/proteína para a marmita!');
-      return;
-    }
-    if (selectedBases.length === 0) {
-      showToast('⚠️ Selecione o tipo de arroz/base da marmita!');
-      return;
-    }
-
-    const newItem: MarmitaItem = {
-      id: `item-marm-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      size: selectedSize,
-      sizeName: currentSizeConfig.name,
-      bases: [...selectedBases],
-      feijoes: [...selectedFeijoes],
-      proteinas: [...selectedProteinas],
-      guarnicoes: [...selectedGuarnicoes],
-      saladas: [...selectedSaladas],
-      adicionais: [...selectedAdicionais],
-      price: singleMarmitaTotalPrice,
-      quantity: marmitaQuantity,
-      notes: marmitaNotes.trim() || undefined,
-    };
-
-    setAssembledItems((prev) => [...prev, newItem]);
-    showToast(`✅ ${marmitaQuantity}x ${currentSizeConfig.label} adicionada ao pedido!`);
-
-    // Reset single box form for next box
-    setMarmitaNotes('');
-    setMarmitaQuantity(1);
-    // Keep base/feijao defaults, reset proteins and sides for next custom box
-    setSelectedProteinas([]);
-    setSelectedGuarnicoes([]);
-    setSelectedSaladas([]);
-    setSelectedAdicionais([]);
-  };
-
-  const handleRemoveItemFromCart = (index: number) => {
-    setAssembledItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Calculate Cart Totals
-  const cartSubtotal = useMemo(() => {
-    const itemsTotal = assembledItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    const beveragesTotal = selectedBeverages.reduce((acc, bev) => acc + bev.price * bev.quantity, 0);
-    return itemsTotal + beveragesTotal;
-  }, [assembledItems, selectedBeverages]);
-
-  const effectiveDeliveryFee = deliveryType === 'entrega' ? Number(deliveryFee) || 0 : 0;
-  const cartTotal = Math.max(0, cartSubtotal + effectiveDeliveryFee - (Number(discount) || 0));
-
-  // Finalize & Create Marmita Order
-  const handleFinalizeOrder = () => {
-    if (assembledItems.length === 0) {
-      // If user hasn't pressed "Adicionar Marmita", but has configured one in the screen, auto-add it!
-      if (selectedProteinas.length > 0) {
-        const autoItem: MarmitaItem = {
-          id: `item-marm-${Date.now()}`,
-          size: selectedSize,
-          sizeName: currentSizeConfig.name,
-          bases: [...selectedBases],
-          feijoes: [...selectedFeijoes],
-          proteinas: [...selectedProteinas],
-          guarnicoes: [...selectedGuarnicoes],
-          saladas: [...selectedSaladas],
-          adicionais: [...selectedAdicionais],
-          price: singleMarmitaTotalPrice,
-          quantity: marmitaQuantity,
-          notes: marmitaNotes.trim() || undefined,
-        };
-        assembledItems.push(autoItem);
-      } else {
-        showToast('⚠️ Adicione pelo menos 1 marmita ao pedido antes de finalizar!');
-        return;
-      }
-    }
-
-    if (!customerName.trim()) {
-      showToast('⚠️ Informe o nome do cliente ou número da comanda/mesa!');
-      return;
-    }
-
-    if (deliveryType === 'entrega' && !tableOrAddress.trim()) {
-      showToast('⚠️ Informe o endereço de entrega do cliente!');
-      return;
-    }
-
-    // Generate next order number
-    const maxNumber = orders.reduce((max, ord) => Math.max(max, ord.orderNumber || 0), 200);
-    const nextOrderNumber = maxNumber + 1;
-
-    const newOrder: MarmitaOrder = {
-      id: `marm-ord-${Date.now()}`,
-      orderNumber: nextOrderNumber,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim() || undefined,
-      deliveryType,
-      tableOrAddress: tableOrAddress.trim() || (deliveryType === 'balcao' ? 'Retirada Balcão' : 'Local'),
-      items: [...assembledItems],
-      beverages: [...selectedBeverages],
-      subtotal: cartSubtotal,
-      deliveryFee: effectiveDeliveryFee,
-      discount: Number(discount) || 0,
-      total: cartTotal,
-      paymentMethod,
-      isPaid,
-      changeFor: changeFor ? Number(changeFor) : undefined,
-      status: 'novo',
-      notes: orderGeneralNotes.trim() || undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    onCreateOrder(newOrder);
-    showToast(`🎉 Pedido #${newOrder.orderNumber} criado com sucesso!`);
-
-    // Reset entire order form
-    setAssembledItems([]);
-    setSelectedBeverages([]);
-    setCustomerName('');
-    setCustomerPhone('');
-    setTableOrAddress('');
-    setDiscount(0);
-    setChangeFor('');
-    setOrderGeneralNotes('');
-
-    // Open thermal print modal
-    if (settings.autoPrintOnCreate) {
-      setPrintOrderModal(newOrder);
-    }
-  };
-
-  // Advance Order Status Helper
-  const handleNextStatus = (order: MarmitaOrder) => {
-    switch (order.status) {
-      case 'novo':
-        onUpdateOrderStatus(order.id, 'em_montagem');
-        showToast(`🍱 Pedido #${order.orderNumber} movido para "Em Montagem"`);
-        break;
-      case 'em_montagem':
-        onUpdateOrderStatus(order.id, 'pronto_embalado');
-        showToast(`📦 Pedido #${order.orderNumber} marcado como "Pronto / Embalado"!`);
-        break;
-      case 'pronto_embalado':
-        if (order.deliveryType === 'entrega') {
-          // Open motoboy modal
-          setMotoboyModalOrder(order);
-          setMotoboyInputName(order.motoboyName || 'Marcio Motoboy');
-        } else {
-          onUpdateOrderStatus(order.id, 'entregue');
-          showToast(`✅ Pedido #${order.orderNumber} entregue no balcão/mesa!`);
-        }
-        break;
-      case 'saiu_para_entrega':
-        onUpdateOrderStatus(order.id, 'entregue');
-        showToast(`🏁 Pedido #${order.orderNumber} concluído e entregue com sucesso!`);
-        break;
-      default:
-        break;
-    }
-  };
-
-  // WhatsApp Message Generator
-  const handleOpenWhatsApp = (order: MarmitaOrder) => {
-    if (!order.customerPhone) {
-      showToast('⚠️ Este pedido não possui telefone/WhatsApp cadastrado.');
-      return;
-    }
-    const cleanPhone = order.customerPhone.replace(/\D/g, '');
-    const phoneWithCountry = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
-    
-    let statusText = 'está sendo preparado';
-    if (order.status === 'em_montagem') statusText = 'está sendo montado na cozinha com todo capricho';
-    if (order.status === 'pronto_embalado') statusText = 'está PRONTO e quentinho aguardando retirada';
-    if (order.status === 'saiu_para_entrega') statusText = `acabou de SAIR PARA ENTREGA com nosso motoboy ${order.motoboyName || ''}`;
-    if (order.status === 'entregue') statusText = 'foi entregue! Bom apetite';
-
-    const itemsSummary = order.items.map((i) => `• ${i.quantity}x ${i.sizeName} (${i.proteinas.join(' + ')})`).join('\n');
-
-    const msg = `Olá *${order.customerName}*! Tudo bem? 🍱\n\nSeu pedido *#${order.orderNumber}* no *${settings.restaurantName}* ${statusText}! 🔥\n\n*Detalhes do Pedido:*\n${itemsSummary}\n💰 *Total:* R$ ${order.total.toFixed(2).replace('.', ',')} (${order.paymentMethod.toUpperCase()}${order.isPaid ? ' - PAGO' : ' - PAGAR NA ENTREGA'})\n\nAgradecemos a preferência! Dúvidas estamos à disposição! 🛵💨`;
-
-    const encoded = encodeURIComponent(msg);
-    window.open(`https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encoded}`, '_blank');
-  };
-
-  // Filtered Orders
-  const filteredOrders = useMemo(() => {
-    return (orders || []).filter((ord) => {
-      if (!ord) return false;
-      // Search
-      const searchMatch = !orderSearch.trim() || 
-        (ord.customerName && ord.customerName.toLowerCase().includes(orderSearch.toLowerCase())) ||
-        String(ord.orderNumber).includes(orderSearch) ||
-        (ord.customerPhone && ord.customerPhone.includes(orderSearch)) ||
-        (ord.tableOrAddress && ord.tableOrAddress.toLowerCase().includes(orderSearch.toLowerCase()));
-
-      // Status
-      const statusMatch = orderStatusFilter === 'todos' || ord.status === orderStatusFilter;
-
-      // Delivery type
-      const deliveryMatch = orderDeliveryFilter === 'todos' || ord.deliveryType === orderDeliveryFilter;
-
-      return searchMatch && statusMatch && deliveryMatch;
-    });
-  }, [orders, orderSearch, orderStatusFilter, orderDeliveryFilter]);
-
-  // Financial metrics for marmitaria
-  const metrics = useMemo(() => {
-    const todayOrders = (orders || []).filter((o) => o && o.status !== 'cancelado');
-    const totalRevenue = todayOrders.reduce((sum, o) => sum + (o?.total || 0), 0);
-    const totalBoxesSold = todayOrders.reduce((sum, o) => {
-      return sum + (o?.items || []).reduce((s, i) => s + (i?.quantity || 0), 0);
-    }, 0);
-
-    const countBySize: Record<MarmitaSize, number> = { P: 0, M: 0, G: 0, executiva: 0 };
-    todayOrders.forEach((o) => {
-      (o?.items || []).forEach((i) => {
-        if (i && countBySize[i.size] !== undefined) {
-          countBySize[i.size] += i.quantity || 0;
-        }
-      });
-    });
-
-    const activeCount = (orders || []).filter((o) => o && o.status !== 'entregue' && o.status !== 'cancelado').length;
-
-    return {
-      totalRevenue,
-      totalBoxesSold,
-      countBySize,
-      activeCount,
-      totalOrdersCount: todayOrders.length
-    };
-  }, [orders]);
+  const weekDays: { key: DayOfWeekKey; label: string; short: string }[] = [
+    { key: 'segunda', label: 'Segunda-feira', short: 'Seg' },
+    { key: 'terca', label: 'Terça-feira', short: 'Ter' },
+    { key: 'quarta', label: 'Quarta-feira', short: 'Qua' },
+    { key: 'quinta', label: 'Quinta-feira', short: 'Qui' },
+    { key: 'sexta', label: 'Sexta-feira', short: 'Sex' },
+    { key: 'sabado', label: 'Sábado', short: 'Sáb' },
+    { key: 'domingo', label: 'Domingo', short: 'Dom' },
+  ];
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Toast */}
+    <div className="space-y-4">
+      {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-amber-500/40 flex items-center space-x-2 text-sm animate-bounce">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-amber-500/40 flex items-center space-x-2 text-sm">
           <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
           <span className="font-semibold">{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Banner & Module Header */}
-      <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-xl shadow-orange-950/10 border border-amber-400/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3.5 sm:space-x-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-inner shrink-0">
-            <ChefHat className="w-7 h-7 sm:w-8 sm:h-8 text-amber-100" />
+      {/* Top Header */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="w-11 h-11 rounded-xl bg-orange-600 text-white flex items-center justify-center shadow-md">
+            <ChefHat className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="bg-white/20 text-white text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-white/30">
-                🍱 Sistema Marmitaria & Marmitex
-              </span>
-              <span className="bg-amber-950/40 text-amber-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                {metrics.activeCount} Pedidos em Produção
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">Marmitaria Maresia</h2>
+              <span className="bg-orange-100 text-orange-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">
+                {activeOrders.length} em produção
               </span>
             </div>
-            <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight mt-0.5">
-              {settings.restaurantName}
-            </h2>
-            <p className="text-xs sm:text-sm text-amber-100/90 font-medium">
-              {settings.subtitle} • WhatsApp: {settings.phoneWhatsapp}
+            <p className="text-xs text-slate-500 font-medium">
+              Cardápio do Dia • Marmitas Pequena, Média e Grande
             </p>
           </div>
         </div>
 
-        {/* Quick actions & Module Return */}
-        <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
-          {onSwitchToEspetos && (
-            <button
-              onClick={onSwitchToEspetos}
-              className="flex-1 md:flex-initial inline-flex items-center justify-center space-x-2 bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-white px-3.5 py-2.5 rounded-xl font-black text-xs border border-amber-400/40 shadow-md transition-all active:scale-95 cursor-pointer"
-              title="Voltar para o Sistema de Espetos e Churrasqueira"
-            >
-              <span>🍖 Ir para Sistema Espetos</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+        {onSwitchToEspetos && (
+          <button
+            type="button"
+            onClick={onSwitchToEspetos}
+            className="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            <span>Ir para Espetos</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Sub-Navigation Tabs */}
-      <div className="flex items-center space-x-1.5 sm:space-x-2 p-1.5 bg-slate-200/80 rounded-2xl overflow-x-auto scrollbar-none">
+      {/* Navigation: 3 Direct Tabs */}
+      <div className="flex items-center space-x-2 p-1 bg-slate-200/70 rounded-xl">
         <button
-          onClick={() => setActiveSubTab('montar')}
-          className={`flex items-center space-x-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer ${
-            activeSubTab === 'montar'
-              ? 'bg-white text-orange-600 shadow-md shadow-slate-950/5'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+          type="button"
+          onClick={() => setActiveTab('novo_pedido')}
+          className={`flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-black transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+            activeTab === 'novo_pedido'
+              ? 'bg-white text-orange-600 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <ChefHat className="w-4 h-4" />
-          <span>Montar Marmita (PDV)</span>
+          <Utensils className="w-4 h-4" />
+          <span>1. Montar Marmita (PDV)</span>
         </button>
 
         <button
-          onClick={() => setActiveSubTab('pedidos')}
-          className={`flex items-center space-x-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer ${
-            activeSubTab === 'pedidos'
-              ? 'bg-white text-orange-600 shadow-md shadow-slate-950/5'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+          type="button"
+          onClick={() => setActiveTab('fila_kds')}
+          className={`flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-black transition-all flex items-center justify-center space-x-2 cursor-pointer relative ${
+            activeTab === 'fila_kds'
+              ? 'bg-white text-orange-600 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <ShoppingBag className="w-4 h-4" />
-          <span>Fila de Pedidos & KDS</span>
-          {metrics.activeCount > 0 && (
-            <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-orange-500 text-white">
-              {metrics.activeCount}
+          <span>2. Fila de Pedidos</span>
+          {activeOrders.length > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-black rounded-full bg-orange-600 text-white">
+              {activeOrders.length}
             </span>
           )}
         </button>
 
         <button
-          onClick={() => setActiveSubTab('cardapio_dia')}
-          className={`flex items-center space-x-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer ${
-            activeSubTab === 'cardapio_dia'
-              ? 'bg-white text-orange-600 shadow-md shadow-slate-950/5'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+          type="button"
+          onClick={() => setActiveTab('cardapio_dia')}
+          className={`flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-black transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+            activeTab === 'cardapio_dia'
+              ? 'bg-white text-orange-600 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <Calendar className="w-4 h-4" />
-          <span>Cardápio do Dia</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('relatorios')}
-          className={`flex items-center space-x-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer ${
-            activeSubTab === 'relatorios'
-              ? 'bg-white text-orange-600 shadow-md shadow-slate-950/5'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-          }`}
-        >
-          <DollarSign className="w-4 h-4" />
-          <span>Vendas & Relatórios</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('config')}
-          className={`flex items-center space-x-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer ${
-            activeSubTab === 'config'
-              ? 'bg-white text-orange-600 shadow-md shadow-slate-950/5'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-          }`}
-        >
-          <Tag className="w-4 h-4" />
-          <span>Tamanhos & Preços</span>
+          <span>3. Cardápio do Dia & Preços</span>
         </button>
       </div>
 
       {/* =====================================================================
-       * SUB-TAB 1: MONTAGEM ÁGIL DE MARMITA (PDV)
+       * TAB 1: MONTAGEM RÁPIDA (PDV ÁGIL COM TIPOS PEQUENA, MÉDIA E GRANDE)
        * ===================================================================== */}
-      {activeSubTab === 'montar' && (
+      {activeTab === 'novo_pedido' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* Left Column: Interactive Box Builder Form (8 Cols) */}
-          <div className="lg:col-span-7 xl:col-span-8 space-y-5">
-            {/* Step 1: Tamanho da Marmita */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center">1</span>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Escolha o Tamanho da Marmita</h3>
+          {/* Left Column: Fast Assembly Form */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-4">
+            
+            {/* Banner of Today's Menu Highlight */}
+            {todayMenu && (
+              <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-3.5 rounded-2xl border border-orange-200/80 flex items-center justify-between gap-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold text-xs">
+                    📅
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-black uppercase text-orange-800 tracking-wider block">
+                      Cardápio de Hoje ({todayMenu.dayLabel}):
+                    </span>
+                    <p className="text-xs font-bold text-slate-800 truncate">
+                      {todayMenu.destaquePrato ? `⭐ ${todayMenu.destaquePrato} • ` : ''}
+                      {todayMenu.carnes.join(' • ')}
+                    </p>
+                  </div>
                 </div>
-                <span className="text-xs text-slate-500 font-medium">Preço base & limites</span>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopyWhatsAppMenu(todayMenu)}
+                  className="bg-white hover:bg-orange-100 text-orange-700 px-3 py-1.5 rounded-xl border border-orange-200 text-xs font-black shrink-0 flex items-center space-x-1 cursor-pointer transition-all"
+                  title="Copiar cardápio formatado para WhatsApp"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">WhatsApp</span>
+                </button>
+              </div>
+            )}
+
+            {/* Step 1: Tipos de Marmita (Pequena, Média e Grande) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  1. Tamanho da Marmita:
+                </span>
+                <span className="text-xs font-bold text-slate-500">
+                  {currentSizeConfig.label} selecionada
+                </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                {sizes.map((s) => (
+              <div className="grid grid-cols-3 gap-2.5">
+                {cleanSizes.map((s) => (
                   <button
                     key={s.size}
                     type="button"
                     onClick={() => setSelectedSize(s.size)}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                    className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer ${
                       selectedSize === s.size
-                        ? 'border-orange-500 bg-orange-50/80 ring-2 ring-orange-400/40 shadow-xs'
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 text-slate-700'
+                        ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-500/20 shadow-xs'
+                        : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    {selectedSize === s.size && (
-                      <CheckCircle2 className="w-4 h-4 text-orange-600 absolute top-2.5 right-2.5" />
-                    )}
-                    <span className="font-black text-sm block text-slate-900">{s.label}</span>
-                    <span className="text-xs font-bold text-slate-500 block">{s.weightGrams}g • Até {s.maxProteins} carne{s.maxProteins > 1 ? 's' : ''}</span>
-                    <span className="text-base font-black text-orange-600 mt-1 block">
+                    <span className="block font-black text-sm sm:text-base text-slate-900">
+                      {s.label}
+                    </span>
+                    <span className="block text-lg font-black text-orange-600 mt-0.5">
                       R$ {s.price.toFixed(2).replace('.', ',')}
+                    </span>
+                    <span className="block text-[11px] text-slate-500 font-medium mt-1">
+                      {s.size === 'G' ? 'Até 2 carnes' : '1 carne inclusa'}
                     </span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Step 2: Arroz & Base */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            {/* Step 2: Carnes do Dia (Cadastradas no Cardápio) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center">2</span>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Arroz & Base</h3>
-                </div>
-                <span className="text-xs text-slate-500">Escolha a base</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {availableOptionsByCategory.base.map((opt) => {
-                  const isSelected = selectedBases.includes(opt.name);
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleToggleBase(opt.name)}
-                      className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-orange-500 bg-orange-50 text-orange-950 font-bold'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold">{opt.name}</span>
-                      {opt.extraPrice > 0 ? (
-                        <span className="text-[11px] font-black text-amber-600 shrink-0 ml-1">
-                          +R$ {opt.extraPrice.toFixed(2).replace('.', ',')}
-                        </span>
-                      ) : (
-                        isSelected && <Check className="w-4 h-4 text-orange-600 shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Step 3: Feijão */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center">3</span>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Feijão do Dia</h3>
-                </div>
-                <span className="text-xs text-slate-500">Escolha o caldo</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {availableOptionsByCategory.feijao.map((opt) => {
-                  const isSelected = selectedFeijoes.includes(opt.name);
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleToggleFeijao(opt.name)}
-                      className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-orange-500 bg-orange-50 text-orange-950 font-bold'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold">{opt.name}</span>
-                      {opt.extraPrice > 0 ? (
-                        <span className="text-[11px] font-black text-amber-600 shrink-0 ml-1">
-                          +R$ {opt.extraPrice.toFixed(2).replace('.', ',')}
-                        </span>
-                      ) : (
-                        isSelected && <Check className="w-4 h-4 text-orange-600 shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Step 4: Carnes / Proteínas do Dia */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-1">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center">4</span>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Carnes & Proteínas do Dia</h3>
-                </div>
-                <span className="text-xs font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full">
-                  Selecionado: {selectedProteinas.length} / {currentSizeConfig.maxProteins} inclusas
+                <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  2. Carne do Dia ({todayMenu?.dayLabel}):
+                </span>
+                <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full">
+                  {selectedProteinas.length} / {currentSizeConfig.maxProteins} inclusa{currentSizeConfig.maxProteins > 1 ? 's' : ''}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {availableOptionsByCategory.proteina.map((opt) => {
-                  const isSelected = selectedProteinas.includes(opt.name);
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleToggleProteina(opt.name)}
-                      className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-orange-500 bg-orange-50/90 text-orange-950 font-bold ring-1 ring-orange-400'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <div className="pr-2">
-                        <span className="text-xs sm:text-sm font-black block text-slate-900">{opt.name}</span>
-                        {opt.description && (
-                          <span className="text-[11px] text-slate-500 line-clamp-1">{opt.description}</span>
-                        )}
-                      </div>
-                      <div className="shrink-0 flex items-center space-x-1">
-                        {opt.extraPrice > 0 && (
-                          <span className="text-[11px] font-black text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
-                            +R$ {opt.extraPrice.toFixed(2).replace('.', ',')}
-                          </span>
-                        )}
-                        <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${
-                          isSelected ? 'bg-orange-600 border-orange-600 text-white' : 'border-slate-300'
-                        }`}>
-                          {isSelected && <Check className="w-3.5 h-3.5" />}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Step 5: Guarnições */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center">5</span>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Guarnições & Acompanhamentos</h3>
-                </div>
-                <span className="text-xs text-slate-500">Até {currentSizeConfig.maxSides} opções</span>
-              </div>
-
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {availableOptionsByCategory.guarnicao.map((opt) => {
-                  const isSelected = selectedGuarnicoes.includes(opt.name);
+                {todayMenu?.carnes.map((carneName, index) => {
+                  const isSelected = selectedProteinas.includes(carneName);
                   return (
                     <button
-                      key={opt.id}
+                      key={index}
                       type="button"
-                      onClick={() => handleToggleGuarnicao(opt.name)}
-                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                      onClick={() => handleToggleProtein(carneName)}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                         isSelected
-                          ? 'border-orange-500 bg-orange-50 text-orange-950 font-bold'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                          ? 'border-orange-500 bg-orange-600 text-white font-black shadow-sm'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-800 font-bold'
                       }`}
                     >
-                      <span className="text-xs font-extrabold line-clamp-1">{opt.name}</span>
-                      <div className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ml-1 ${
-                        isSelected ? 'bg-orange-600 border-orange-600 text-white' : 'border-slate-300'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3" />}
-                      </div>
+                      <span className="text-xs truncate">{carneName}</span>
+                      {isSelected && <Check className="w-4 h-4 shrink-0 ml-1" />}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Step 6: Saladas */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center">6</span>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Saladas Frescas</h3>
-                </div>
-                <span className="text-xs text-slate-500">Opcional</span>
-              </div>
+            {/* Step 3: Base Padrão (Arroz + Feijão) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
+              <span className="text-xs font-black uppercase text-slate-400 tracking-wider block">
+                3. Arroz & Feijão (Padrão Completo):
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBases(['Arroz Branco'])}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    selectedBases.includes('Arroz Branco')
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  🍚 Arroz Branco
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBases(['Arroz Integral'])}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    selectedBases.includes('Arroz Integral')
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  🍚 Arroz Integral
+                </button>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableOptionsByCategory.salada.map((opt) => {
-                  const isSelected = selectedSaladas.includes(opt.name);
+                <button
+                  type="button"
+                  onClick={() => setSelectedFeijoes(['Feijão Carioca'])}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    selectedFeijoes.includes('Feijão Carioca')
+                      ? 'bg-amber-900 text-white border-amber-900'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  🍲 Feijão Carioca
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFeijoes(['Feijão Preto'])}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    selectedFeijoes.includes('Feijão Preto')
+                      ? 'bg-amber-900 text-white border-amber-900'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  🍲 Feijão Preto
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedFeijoes([])}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    selectedFeijoes.length === 0
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-slate-50 text-slate-500 border-slate-200'
+                  }`}
+                >
+                  🚫 Sem Feijão
+                </button>
+              </div>
+            </div>
+
+            {/* Step 4: Acompanhamentos do Dia */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
+              <span className="text-xs font-black uppercase text-slate-400 tracking-wider block">
+                4. Acompanhamentos Cadastrados para Hoje:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {todayMenu?.acompanhamentos.map((sideName, index) => {
+                  const isSelected = selectedSides.includes(sideName);
                   return (
                     <button
-                      key={opt.id}
+                      key={index}
                       type="button"
-                      onClick={() => handleToggleSalada(opt.name)}
-                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                      onClick={() => handleToggleSide(sideName)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1.5 ${
                         isSelected
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-950 font-bold'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                          ? 'bg-orange-50 border-orange-500 text-orange-950 font-black'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
-                      <span className="text-xs font-extrabold">{opt.name}</span>
-                      <div className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ml-1 ${
-                        isSelected ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3" />}
-                      </div>
+                      {isSelected ? <Check className="w-3.5 h-3.5 text-orange-600" /> : <Plus className="w-3.5 h-3.5 text-slate-400" />}
+                      <span>{sideName}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Step 7: Adicionais Extras */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center">7</span>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Adicionais Extras</h3>
-                </div>
-                <span className="text-xs text-slate-500">Turbine sua marmita</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableOptionsByCategory.adicional.map((opt) => {
-                  const isSelected = selectedAdicionais.some((a) => a.name === opt.name);
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleToggleAdicional(opt)}
-                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-amber-500 bg-amber-50 text-amber-950 font-bold'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <span className="text-xs font-extrabold">{opt.name}</span>
-                      <span className="text-xs font-black text-amber-600 shrink-0 ml-1">
-                        +R$ {opt.extraPrice.toFixed(2).replace('.', ',')}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Marmita Single Notes & Add to Order Button */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Observações desta marmita (Ex: "Feijão por cima", "Sem cebola no bife", "Pouco arroz"):
-                </label>
+            {/* Notes & Add Button */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="flex-1">
                 <input
                   type="text"
                   value={marmitaNotes}
                   onChange={(e) => setMarmitaNotes(e.target.value)}
-                  placeholder="Instruções para o montador da marmita..."
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                  placeholder="Observação da marmita (Ex: 'Feijão por cima', 'Pouco arroz')..."
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-400"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-3 pt-2">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-slate-600">Qtd:</span>
-                  <div className="flex items-center bg-white border border-slate-300 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setMarmitaQuantity((q) => Math.max(1, q - 1))}
-                      className="p-2 text-slate-600 hover:bg-slate-100 rounded-l-xl cursor-pointer"
-                    >
-                      <Minus className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="px-3 font-black text-sm text-slate-900">{marmitaQuantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => setMarmitaQuantity((q) => q + 1)}
-                      className="p-2 text-slate-600 hover:bg-slate-100 rounded-r-xl cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+              <div className="flex items-center space-x-2 shrink-0">
+                <div className="flex items-center bg-white border border-slate-300 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setMarmitaQuantity((q) => Math.max(1, q - 1))}
+                    className="p-2 text-slate-500 hover:bg-slate-100 rounded-l-xl cursor-pointer"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="px-2.5 font-black text-xs text-slate-800">{marmitaQuantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => setMarmitaQuantity((q) => q + 1)}
+                    className="p-2 text-slate-500 hover:bg-slate-100 rounded-r-xl cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 <button
                   type="button"
-                  onClick={handleAddMarmitaToOrderCart}
-                  className="inline-flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+                  onClick={handleAddMarmita}
+                  className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2.5 rounded-xl font-black text-xs shadow-md transition-all cursor-pointer flex items-center space-x-1"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Incluir esta Marmita (R$ {(singleMarmitaTotalPrice * marmitaQuantity).toFixed(2).replace('.', ',')})</span>
+                  <span>+ Adicionar (R$ {(currentMarmitaPrice * marmitaQuantity).toFixed(2).replace('.', ',')})</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Order Cart, Delivery, Customer Info & Checkout (4-5 Cols) */}
-          <div className="lg:col-span-5 xl:col-span-4 space-y-4 sticky top-20">
-            <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-md space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center space-x-2">
-                  <ShoppingBag className="w-5 h-5 text-orange-600" />
-                  <h3 className="font-black text-slate-900 text-base">Resumo do Pedido</h3>
+          {/* Right Column: Order Checkout */}
+          <div className="lg:col-span-5 xl:col-span-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-md space-y-4 sticky top-20">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-1.5">
+                <ShoppingBag className="w-4 h-4 text-orange-600" />
+                <span>Resumo do Pedido</span>
+              </h3>
+              <span className="text-xs font-bold text-slate-400">
+                {cartItems.reduce((acc, i) => acc + i.quantity, 0)} item(s)
+              </span>
+            </div>
+
+            {/* Cart Items List */}
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {cartItems.length === 0 ? (
+                <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <p className="text-xs font-bold text-slate-500">Nenhuma marmita no carrinho</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Clique em "+ Adicionar" ou "Confirmar Pedido"</p>
                 </div>
-                <span className="text-xs font-bold text-slate-500">
-                  {assembledItems.reduce((acc, i) => acc + i.quantity, 0)} marmita(s)
+              ) : (
+                cartItems.map((item, idx) => (
+                  <div key={item.id} className="bg-orange-50/70 p-2.5 rounded-xl border border-orange-200 text-xs flex items-center justify-between">
+                    <div>
+                      <span className="font-black text-slate-900 block">
+                        {item.quantity}x {item.sizeName} — R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
+                      </span>
+                      <span className="text-[11px] text-slate-600 block">
+                        🥩 {item.proteinas.join(', ')}
+                      </span>
+                      {item.guarnicoes.length > 0 && (
+                        <span className="text-[10px] text-slate-500 block truncate max-w-[200px]">
+                          + {item.guarnicoes.join(', ')}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCartItems((prev) => prev.filter((_, i) => i !== idx))}
+                      className="text-slate-400 hover:text-red-500 p-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Customer & Delivery Form */}
+            <div className="space-y-2.5 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Nome do Cliente:</label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Ex: João / Mesa 04"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Tipo de Pedido:</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['balcao', 'entrega', 'mesa'] as MarmitaDeliveryType[]).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setDeliveryType(type)}
+                      className={`py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
+                        deliveryType === type
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {type === 'balcao' ? '🛍️ Balcão' : type === 'entrega' ? '🛵 Entrega' : '🍽️ Mesa'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {deliveryType === 'entrega' && (
+                <div className="space-y-1.5 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                  <input
+                    type="text"
+                    value={addressOrTable}
+                    onChange={(e) => setAddressOrTable(e.target.value)}
+                    placeholder="Rua, número e bairro..."
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-amber-300 text-xs"
+                  />
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                    <span>Taxa de Entrega (R$):</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={deliveryFee}
+                      onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                      className="w-16 px-1.5 py-0.5 rounded bg-white border border-amber-300 text-right font-black"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+              <label className="block text-[11px] font-bold text-slate-600">Forma de Pagamento:</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['pix', 'cartao', 'dinheiro'] as const).map((pm) => (
+                  <button
+                    key={pm}
+                    type="button"
+                    onClick={() => setPaymentMethod(pm === 'cartao' ? 'debito' : pm)}
+                    className={`py-1.5 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer ${
+                      (pm === 'cartao' && (paymentMethod === 'debito' || paymentMethod === 'credito')) || paymentMethod === pm
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {pm}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Total and Submit */}
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <div className="flex items-center justify-between text-base font-black text-slate-900">
+                <span>Total:</span>
+                <span className="text-xl text-orange-600">
+                  R$ {orderTotal.toFixed(2).replace('.', ',')}
                 </span>
               </div>
 
-              {/* List of Assembled Marmitas */}
-              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-                {assembledItems.length === 0 ? (
-                  <div className="text-center py-6 px-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                    <ChefHat className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
-                    <p className="text-xs font-bold text-slate-500">Nenhuma marmita incluída ainda</p>
-                    <p className="text-[11px] text-slate-400">Monte as carnes e clique em "Incluir esta Marmita"</p>
-                  </div>
-                ) : (
-                  assembledItems.map((item, idx) => (
-                    <div key={item.id} className="bg-orange-50/60 p-3 rounded-xl border border-orange-200/80 text-xs relative space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-slate-900">
-                          {item.quantity}x {item.sizeName}
-                        </span>
-                        <div className="flex items-center space-x-2">
-                          <span className="font-black text-orange-700">
-                            R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItemFromCart(idx)}
-                            className="text-slate-400 hover:text-red-500 p-0.5 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-slate-600 font-medium">
-                        🥩 <strong>Carnes:</strong> {item.proteinas.join(', ') || 'Nenhuma'}
-                      </p>
-                      <p className="text-[11px] text-slate-600">
-                        🍚 {item.bases.join(', ')} • 🍲 {item.feijoes.join(', ')}
-                      </p>
-                      {item.guarnicoes.length > 0 && (
-                        <p className="text-[10px] text-slate-500">
-                          🥔 <strong>Guarnições:</strong> {item.guarnicoes.join(', ')}
-                        </p>
-                      )}
-                      {item.adicionais.length > 0 && (
-                        <p className="text-[10px] text-amber-700 font-bold">
-                          ✨ <strong>Extras:</strong> {item.adicionais.map((a) => a.name).join(', ')}
-                        </p>
-                      )}
-                      {item.notes && (
-                        <p className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-semibold">
-                          Obs: {item.notes}
-                        </p>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Beverages Quick Add */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <span className="text-xs font-bold text-slate-700 block">Bebidas & Sucos para Acompanhar:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {availableOptionsByCategory.bebida.map((beb) => (
-                    <button
-                      key={beb.id}
-                      type="button"
-                      onClick={() => handleAddBeverage(beb)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-100 text-slate-800 text-[11px] font-bold border border-slate-200 transition-all flex items-center space-x-1 cursor-pointer"
-                    >
-                      <span>+ {beb.name} (R$ {beb.extraPrice.toFixed(2).replace('.', ',')})</span>
-                    </button>
-                  ))}
-                </div>
-
-                {selectedBeverages.length > 0 && (
-                  <div className="bg-slate-50 p-2 rounded-xl space-y-1 text-xs">
-                    {selectedBeverages.map((b) => (
-                      <div key={b.id} className="flex items-center justify-between">
-                        <span className="text-slate-700 font-medium">{b.quantity}x {b.name}</span>
-                        <div className="flex items-center space-x-1.5">
-                          <span className="font-bold text-slate-900">R$ {(b.price * b.quantity).toFixed(2).replace('.', ',')}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveBeverage(b.id)}
-                            className="text-red-500 hover:text-red-700 cursor-pointer"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Customer & Delivery Method */}
-              <div className="space-y-2.5 pt-2 border-t border-slate-100">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Nome do Cliente *</label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Ex: João da Silva / Balcão / Mesa 04"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">WhatsApp / Tel</label>
-                    <input
-                      type="text"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      placeholder="(11) 99999-9999"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Tipo de Entrega</label>
-                    <select
-                      value={deliveryType}
-                      onChange={(e) => setDeliveryType(e.target.value as MarmitaDeliveryType)}
-                      className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    >
-                      <option value="entrega">🛵 Delivery / Moto</option>
-                      <option value="balcao">🛍️ Retirada Balcão</option>
-                      <option value="mesa">🍽️ Mesa / Local</option>
-                    </select>
-                  </div>
-                </div>
-
-                {deliveryType === 'entrega' && (
-                  <div className="space-y-2 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200">
-                    <div>
-                      <label className="block text-[11px] font-bold text-amber-900 mb-0.5">Endereço de Entrega *</label>
-                      <input
-                        type="text"
-                        value={tableOrAddress}
-                        onChange={(e) => setTableOrAddress(e.target.value)}
-                        placeholder="Rua, número, bairro e complemento..."
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-amber-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-400"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-amber-900">Taxa de Entrega (R$):</span>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={deliveryFee}
-                        onChange={(e) => setDeliveryFee(Number(e.target.value))}
-                        className="w-20 px-2 py-1 rounded bg-white border border-amber-300 text-xs font-black text-right"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {deliveryType === 'mesa' && (
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Número da Mesa</label>
-                    <input
-                      type="text"
-                      value={tableOrAddress}
-                      onChange={(e) => setTableOrAddress(e.target.value)}
-                      placeholder="Ex: Mesa 05"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Payment Method */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <span className="text-xs font-bold text-slate-700 block">Forma de Pagamento:</span>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(['pix', 'credito', 'debito', 'dinheiro'] as PaymentMethod[]).map((pm) => (
-                    <button
-                      key={pm}
-                      type="button"
-                      onClick={() => setPaymentMethod(pm)}
-                      className={`py-1.5 rounded-lg text-xs font-black uppercase transition-all cursor-pointer ${
-                        paymentMethod === pm
-                          ? 'bg-slate-900 text-white shadow-xs'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {pm}
-                    </button>
-                  ))}
-                </div>
-
-                {paymentMethod === 'dinheiro' && (
-                  <div className="flex items-center justify-between gap-2 pt-1">
-                    <span className="text-[11px] font-bold text-slate-600">Troco para (R$):</span>
-                    <input
-                      type="number"
-                      value={changeFor}
-                      onChange={(e) => setChangeFor(e.target.value)}
-                      placeholder="Ex: 50.00"
-                      className="w-24 px-2 py-1 rounded-lg bg-slate-50 border border-slate-300 text-xs font-bold text-right"
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center space-x-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="chk-paid"
-                    checked={isPaid}
-                    onChange={(e) => setIsPaid(e.target.checked)}
-                    className="w-4 h-4 text-orange-600 rounded cursor-pointer"
-                  />
-                  <label htmlFor="chk-paid" className="text-xs font-bold text-slate-700 cursor-pointer">
-                    Pedido Já Pago (Pelo app/balcão)
-                  </label>
-                </div>
-              </div>
-
-              {/* Total & Checkout Button */}
-              <div className="pt-3 border-t border-slate-200 space-y-2">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                  <span>Subtotal Marmitas & Bebidas:</span>
-                  <span>R$ {cartSubtotal.toFixed(2).replace('.', ',')}</span>
-                </div>
-                {deliveryType === 'entrega' && (
-                  <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                    <span>Taxa de Entrega:</span>
-                    <span>R$ {effectiveDeliveryFee.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between text-base font-black text-slate-900 pt-1 border-t border-dashed border-slate-200">
-                  <span>Total do Pedido:</span>
-                  <span className="text-xl text-orange-600">
-                    R$ {cartTotal.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleFinalizeOrder}
-                  className="w-full bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-500 hover:to-amber-500 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg shadow-orange-600/30 flex items-center justify-center space-x-2 cursor-pointer active:scale-95 transition-all"
-                >
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>Finalizar & Imprimir Etiqueta</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleFinalizeOrder}
+                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-black text-sm shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center space-x-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirmar Pedido (R$ {orderTotal.toFixed(2).replace('.', ',')})</span>
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* =====================================================================
-       * SUB-TAB 2: FILA DE PEDIDOS & EXPEDIÇÃO (KDS)
+       * TAB 2: FILA DE PEDIDOS & KDS
        * ===================================================================== */}
-      {activeSubTab === 'pedidos' && (
+      {activeTab === 'fila_kds' && (
         <div className="space-y-4">
-          {/* Search and Filters */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-2.5">
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={orderSearch}
                 onChange={(e) => setOrderSearch(e.target.value)}
-                placeholder="Buscar por cliente, endereço ou #..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                placeholder="Buscar por cliente ou nº..."
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
               />
             </div>
 
-            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
-              <select
-                value={orderStatusFilter}
-                onChange={(e) => setOrderStatusFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold focus:outline-none"
-              >
-                <option value="todos">Todos os Status</option>
-                <option value="novo">Novos Pedidos</option>
-                <option value="em_montagem">Em Montagem</option>
-                <option value="pronto_embalado">Prontos / Embalados</option>
-                <option value="saiu_para_entrega">Saiu para Entrega</option>
-                <option value="entregue">Entregues / Concluídos</option>
-              </select>
-
-              <select
-                value={orderDeliveryFilter}
-                onChange={(e) => setOrderDeliveryFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold focus:outline-none"
-              >
-                <option value="todos">Todos os Tipos</option>
-                <option value="entrega">🛵 Delivery</option>
-                <option value="balcao">🛍️ Balcão</option>
-                <option value="mesa">🍽️ Mesa</option>
-              </select>
-            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold w-full sm:w-auto"
+            >
+              <option value="todos">Todos os Pedidos</option>
+              <option value="novo">Novos</option>
+              <option value="em_montagem">Em Preparo</option>
+              <option value="pronto_embalado">Prontos</option>
+              <option value="saiu_para_entrega">Em Entrega</option>
+              <option value="entregue">Concluídos</option>
+            </select>
           </div>
 
-          {/* Orders Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredOrders.length === 0 ? (
-              <div className="col-span-full py-12 text-center bg-white rounded-3xl border border-dashed border-slate-200">
-                <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-                <h4 className="font-extrabold text-slate-700 text-base">Nenhum pedido encontrado</h4>
-                <p className="text-xs text-slate-400">Lance uma nova marmita no PDV para ver os pedidos aqui.</p>
+              <div className="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto mb-1.5" />
+                <p className="text-sm font-bold text-slate-600">Nenhum pedido encontrado</p>
+                <p className="text-xs text-slate-400">Lance uma marmita no PDV para ver os pedidos aqui.</p>
               </div>
             ) : (
               filteredOrders.map((order) => {
                 const isCompleted = order.status === 'entregue';
-                const isCancelled = order.status === 'cancelado';
+                const statusColors = {
+                  novo: 'bg-blue-100 text-blue-800 border-blue-200',
+                  em_montagem: 'bg-amber-100 text-amber-800 border-amber-200',
+                  pronto_embalado: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                  saiu_para_entrega: 'bg-purple-100 text-purple-800 border-purple-200',
+                  entregue: 'bg-slate-100 text-slate-600 border-slate-200',
+                  cancelado: 'bg-red-100 text-red-600 border-red-200',
+                };
+
+                const statusLabels = {
+                  novo: 'Novo Pedido',
+                  em_montagem: 'Em Montagem',
+                  pronto_embalado: 'Pronto / Embalado',
+                  saiu_para_entrega: 'Saiu para Entrega',
+                  entregue: 'Entregue / Concluído',
+                  cancelado: 'Cancelado',
+                };
 
                 return (
                   <div
                     key={order.id}
-                    className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-sm space-y-3 relative transition-all ${
-                      order.status === 'novo' ? 'border-orange-400 ring-2 ring-orange-400/20' :
-                      order.status === 'em_montagem' ? 'border-amber-400 bg-amber-50/20' :
-                      order.status === 'pronto_embalado' ? 'border-emerald-400 bg-emerald-50/20' :
-                      order.status === 'saiu_para_entrega' ? 'border-blue-400 bg-blue-50/20' :
-                      'border-slate-200 opacity-80'
+                    className={`bg-white rounded-2xl p-4 border shadow-sm space-y-3 transition-all ${
+                      isCompleted ? 'opacity-70 border-slate-200' : 'border-slate-200 hover:border-orange-300'
                     }`}
                   >
-                    {/* Header */}
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                      <div className="flex items-center space-x-2">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-black text-xs">
-                          #{order.orderNumber}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase border ${
-                          order.deliveryType === 'entrega' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                          order.deliveryType === 'balcao' ? 'bg-amber-100 text-amber-800 border-amber-200' :
-                          'bg-purple-100 text-purple-800 border-purple-200'
-                        }`}>
-                          {order.deliveryType === 'entrega' ? '🛵 Delivery' : order.deliveryType === 'balcao' ? '🛍️ Balcão' : '🍽️ Mesa'}
-                        </span>
-                      </div>
-
-                      {/* Status Badge */}
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        order.status === 'novo' ? 'bg-red-100 text-red-800' :
-                        order.status === 'em_montagem' ? 'bg-amber-100 text-amber-800' :
-                        order.status === 'pronto_embalado' ? 'bg-emerald-100 text-emerald-800' :
-                        order.status === 'saiu_para_entrega' ? 'bg-blue-100 text-blue-800' :
-                        order.status === 'entregue' ? 'bg-slate-100 text-slate-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {order.status === 'novo' ? '🔔 Novo' :
-                         order.status === 'em_montagem' ? '👨‍🍳 Montando' :
-                         order.status === 'pronto_embalado' ? '📦 Pronto' :
-                         order.status === 'saiu_para_entrega' ? '🛵 Na Rota' :
-                         order.status === 'entregue' ? '✅ Entregue' : 'Cancelado'}
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-900 text-base">
+                        #{order.orderNumber}
+                      </span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${statusColors[order.status]}`}>
+                        {statusLabels[order.status]}
                       </span>
                     </div>
 
-                    {/* Customer & Address */}
                     <div>
-                      <h4 className="font-black text-slate-900 text-sm sm:text-base">{order.customerName}</h4>
-                      {order.tableOrAddress && (
-                        <p className="text-xs text-slate-600 font-medium flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{order.tableOrAddress}</span>
-                        </p>
-                      )}
-                      {order.motoboyName && order.status === 'saiu_para_entrega' && (
-                        <p className="text-xs text-blue-700 font-bold flex items-center gap-1 mt-0.5">
-                          <Motorbike className="w-3.5 h-3.5 shrink-0" />
-                          <span>Motoboy: {order.motoboyName}</span>
-                        </p>
-                      )}
+                      <h4 className="font-bold text-slate-900 text-sm truncate">{order.customerName}</h4>
+                      <p className="text-xs text-slate-500">
+                        {order.deliveryType === 'entrega' ? '🛵 Delivery' : order.deliveryType === 'mesa' ? '🍽️ Mesa' : '🛍️ Balcão'}
+                        {order.tableOrAddress && ` • ${order.tableOrAddress}`}
+                      </p>
                     </div>
 
-                    {/* Items List */}
-                    <div className="bg-slate-50 p-3 rounded-xl space-y-2 border border-slate-100 text-xs">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="space-y-0.5 border-b border-slate-200/60 pb-1.5 last:border-0 last:pb-0">
-                          <div className="flex items-center justify-between font-black text-slate-900">
-                            <span>{item.quantity}x {item.sizeName}</span>
-                            <span>R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
-                          </div>
-                          <p className="text-[11px] text-orange-950 font-bold">
-                            🥩 {item.proteinas.join(' + ')}
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            🍚 {item.bases.join(', ')} • 🍲 {item.feijoes.join(', ')}
+                    <div className="bg-slate-50 p-2.5 rounded-xl space-y-1 text-xs">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="border-b border-slate-200/60 pb-1 last:border-0 last:pb-0">
+                          <span className="font-black text-slate-800">
+                            {item.quantity}x Marmita {item.sizeName}
+                          </span>
+                          <p className="text-[11px] text-slate-600">
+                            🥩 {item.proteinas.join(', ')}
                           </p>
                           {item.guarnicoes.length > 0 && (
-                            <p className="text-[10px] text-slate-500">
-                              🥔 {item.guarnicoes.join(', ')}
-                            </p>
-                          )}
-                          {item.adicionais.length > 0 && (
-                            <p className="text-[10px] text-amber-700 font-bold">
-                              ✨ {item.adicionais.map((a) => a.name).join(', ')}
+                            <p className="text-[10px] text-slate-500 truncate">
+                              + {item.guarnicoes.join(', ')}
                             </p>
                           )}
                           {item.notes && (
-                            <p className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-semibold">
+                            <p className="text-[10px] text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-medium mt-0.5">
                               Obs: {item.notes}
                             </p>
                           )}
                         </div>
                       ))}
-
-                      {order.beverages.length > 0 && (
-                        <div className="pt-1 text-[11px] font-bold text-slate-700">
-                          🥤 Bebidas: {order.beverages.map((b) => `${b.quantity}x ${b.name}`).join(', ')}
-                        </div>
-                      )}
                     </div>
 
-                    {/* Financial Summary */}
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-                      <span className="font-extrabold text-slate-700">
-                        Total: <strong className="text-orange-600 text-sm">R$ {order.total.toFixed(2).replace('.', ',')}</strong>
+                      <span className="font-black text-slate-900">
+                        Total: <strong className="text-orange-600">R$ {order.total.toFixed(2).replace('.', ',')}</strong>
                       </span>
-                      <span className="text-[11px] font-bold text-slate-500">
-                        {order.paymentMethod.toUpperCase()} • {order.isPaid ? '✅ PAGO' : '⚠️ PENDENTE'}
+                      <span className="text-[11px] font-bold text-slate-400">
+                        {order.paymentMethod.toUpperCase()}
                       </span>
                     </div>
 
-                    {/* Actions Bar */}
-                    <div className="flex items-center gap-1.5 pt-2">
-                      {!isCompleted && !isCancelled && (
+                    <div className="flex items-center gap-1.5 pt-1">
+                      {!isCompleted && (
                         <button
                           type="button"
-                          onClick={() => handleNextStatus(order)}
-                          className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 px-3 rounded-xl font-black text-xs shadow-xs transition-all active:scale-95 flex items-center justify-center space-x-1 cursor-pointer"
+                          onClick={() => handleAdvanceStatus(order)}
+                          className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 px-3 rounded-xl font-black text-xs transition-all cursor-pointer"
                         >
-                          <span>
-                            {order.status === 'novo' ? 'Começar Montagem 👨‍🍳' :
-                             order.status === 'em_montagem' ? 'Marcar Pronto 📦' :
-                             order.status === 'pronto_embalado' && order.deliveryType === 'entrega' ? 'Despachar Motoboy 🛵' :
-                             'Finalizar Entrega ✅'}
-                          </span>
+                          {order.status === 'novo' ? 'Iniciar Preparo 👨‍🍳' :
+                           order.status === 'em_montagem' ? 'Marcar Pronto 📦' :
+                           order.status === 'pronto_embalado' && order.deliveryType === 'entrega' ? 'Despachar 🛵' :
+                           'Concluir Entrega ✅'}
                         </button>
                       )}
 
                       <button
                         type="button"
                         onClick={() => setPrintOrderModal(order)}
-                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
-                        title="Imprimir Etiqueta / Comanda da Marmita"
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                        title="Imprimir Comanda Térmica"
                       >
                         <Printer className="w-4 h-4" />
                       </button>
@@ -1390,9 +1053,12 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
                       {order.customerPhone && (
                         <button
                           type="button"
-                          onClick={() => handleOpenWhatsApp(order)}
-                          className="p-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition-all cursor-pointer"
-                          title="Enviar aviso no WhatsApp do cliente"
+                          onClick={() => {
+                            setPrintOrderModal(order);
+                            handleShareWhatsApp();
+                          }}
+                          className="p-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-700 cursor-pointer"
+                          title="Enviar aviso WhatsApp"
                         >
                           <Send className="w-4 h-4" />
                         </button>
@@ -1407,574 +1073,229 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
       )}
 
       {/* =====================================================================
-       * SUB-TAB 3: CARDÁPIO DO DIA (OPÇÕES DE HOJE)
+       * TAB 3: CAMPO PARA CADASTRAR O CARDÁPIO DE CADA DIA & PREÇOS
        * ===================================================================== */}
-      {activeSubTab === 'cardapio_dia' && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      {activeTab === 'cardapio_dia' && (
+        <div className="space-y-5">
+          {/* Preços dos 3 Tamanhos (Pequena, Média e Grande) */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <div>
-              <h3 className="font-black text-slate-900 text-lg">Cardápio do Dia (Disponibilidade)</h3>
-              <p className="text-xs text-slate-500">
-                Ative ou desative o que está sendo servido hoje na sua marmitaria com 1 toque.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(['proteina', 'guarnicao', 'base', 'feijao', 'salada', 'adicional'] as MarmitaOptionCategory[]).map((cat) => {
-              const categoryOptions = (options || []).filter((o) => o && o.category === cat);
-              const catTitle = 
-                cat === 'proteina' ? '🥩 Carnes & Proteínas do Dia' :
-                cat === 'guarnicao' ? '🥔 Guarnições & Acompanhamentos' :
-                cat === 'base' ? '🍚 Arroz & Bases' :
-                cat === 'feijao' ? '🍲 Feijões' :
-                cat === 'salada' ? '🥗 Saladas Frescas' : '✨ Adicionais & Extras';
-
-              return (
-                <div key={cat} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <h4 className="font-black text-slate-900 text-sm border-b border-slate-100 pb-2">{catTitle}</h4>
-                  <div className="space-y-2">
-                    {categoryOptions.map((opt) => (
-                      <div
-                        key={opt.id}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                          opt.isAvailableToday
-                            ? 'bg-slate-50/80 border-slate-200 text-slate-900'
-                            : 'bg-slate-100/40 border-slate-200 text-slate-400 opacity-60'
-                        }`}
-                      >
-                        <div>
-                          <span className="font-extrabold text-xs block">{opt.name}</span>
-                          {opt.extraPrice > 0 && (
-                            <span className="text-[10px] text-amber-600 font-bold">+R$ {opt.extraPrice.toFixed(2).replace('.', ',')}</span>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = options.map((o) =>
-                              o.id === opt.id ? { ...o, isAvailableToday: !o.isAvailableToday } : o
-                            );
-                            onUpdateOptions(updated);
-                            showToast(`Disponibilidade de "${opt.name}" atualizada!`);
-                          }}
-                          className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                            opt.isAvailableToday
-                              ? 'bg-emerald-500 text-white shadow-xs'
-                              : 'bg-slate-300 text-slate-700'
-                          }`}
-                        >
-                          {opt.isAvailableToday ? 'DISPONÍVEL' : 'PAUSADO'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================================
-       * SUB-TAB 4: VENDAS & RELATÓRIOS DE MARMITARIA
-       * ===================================================================== */}
-      {activeSubTab === 'relatorios' && (
-        <div className="space-y-4">
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">Faturamento Total</span>
-              <span className="text-xl sm:text-2xl font-black text-emerald-600 block mt-1">
-                R$ {metrics.totalRevenue.toFixed(2).replace('.', ',')}
-              </span>
+              <h3 className="font-black text-slate-900 text-base">Valores das Marmitas</h3>
+              <p className="text-xs text-slate-500">Defina os preços dos 3 tamanhos oficiais do sistema:</p>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">Marmitas Vendidas</span>
-              <span className="text-xl sm:text-2xl font-black text-orange-600 block mt-1">
-                {metrics.totalBoxesSold} unidades
-              </span>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">Pedidos Finalizados</span>
-              <span className="text-xl sm:text-2xl font-black text-slate-900 block mt-1">
-                {metrics.totalOrdersCount} pedidos
-              </span>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">Ticket Médio</span>
-              <span className="text-xl sm:text-2xl font-black text-blue-600 block mt-1">
-                R$ {metrics.totalOrdersCount > 0 ? (metrics.totalRevenue / metrics.totalOrdersCount).toFixed(2).replace('.', ',') : '0,00'}
-              </span>
-            </div>
-          </div>
-
-          {/* Breakdown por tamanho */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <h4 className="font-black text-slate-900 text-sm sm:text-base">Marmitas Vendidas por Tamanho</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {(['P', 'M', 'G', 'executiva'] as MarmitaSize[]).map((sizeKey) => {
-                const count = metrics.countBySize[sizeKey] || 0;
-                const sizeObj = sizes.find((s) => s.size === sizeKey);
-                return (
-                  <div key={sizeKey} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                    <span className="font-extrabold text-xs text-slate-700 block">{sizeObj?.name || sizeKey}</span>
-                    <span className="text-lg font-black text-orange-600 mt-1 block">{count} un.</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================================
-       * SUB-TAB 5: TAMANHOS & PREÇOS CONFIG
-       * ===================================================================== */}
-      {activeSubTab === 'config' && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <div>
-              <h3 className="font-black text-slate-900 text-lg">Configurações de Preços & Tamanhos</h3>
-              <p className="text-xs text-slate-500">Edite os preços base e limites de carne de cada marmita.</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {sizes.map((s, idx) => (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {cleanSizes.map((s) => (
                 <div key={s.size} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <span className="font-black text-sm text-slate-900 block">{s.name}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-sm text-slate-900">{s.label}</span>
+                    <span className="text-[11px] font-bold text-slate-400">
+                      {s.size === 'G' ? '2 carnes' : '1 carne'}
+                    </span>
+                  </div>
+
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600">Preço Base (R$):</label>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Preço (R$):</label>
                     <input
                       type="number"
                       step="0.5"
                       value={s.price}
                       onChange={(e) => {
-                        const newSizes = [...sizes];
-                        newSizes[idx] = { ...newSizes[idx], price: Number(e.target.value) };
-                        onUpdateSizes(newSizes);
+                        const newPrice = Number(e.target.value);
+                        const updated = cleanSizes.map((item) =>
+                          item.size === s.size ? { ...item, price: newPrice } : item
+                        );
+                        onUpdateSizes(updated);
                       }}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-black text-orange-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600">Limite de Carnes Inclusas:</label>
-                    <input
-                      type="number"
-                      value={s.maxProteins}
-                      onChange={(e) => {
-                        const newSizes = [...sizes];
-                        newSizes[idx] = { ...newSizes[idx], maxProteins: Number(e.target.value) };
-                        onUpdateSizes(newSizes);
-                      }}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800"
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm font-black text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400"
                     />
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* =====================================================================
-       * MODAL: ETIQUETA TÉRMICA DA MARMITA (PARA TAMPA OU MOTOBOY)
-       * ===================================================================== */}
-      {printOrderModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-4 sm:p-6 border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
-                  <Printer className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-base sm:text-lg">Etiqueta & Comanda de Marmita</h3>
-                  <p className="text-xs font-bold text-slate-500">
-                    Pedido #{printOrderModal.orderNumber} • {printOrderModal.customerName}
-                  </p>
-                </div>
+          {/* Cadastro de Cardápio de Cada Dia da Semana */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
+                  <span>📅 Cadastrar Cardápio de Cada Dia</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Cadastre as carnes e acompanhamentos servidos em cada dia da semana.
+                </p>
               </div>
+
               <button
                 type="button"
-                onClick={() => setPrintOrderModal(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition-colors"
+                onClick={() => handleCopyWhatsAppMenu(activeMenu)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
               >
-                ✕
+                <Share2 className="w-4 h-4" />
+                <span>Copiar Cardápio p/ WhatsApp</span>
               </button>
             </div>
 
-            {/* Quick Controls: Format, Paper & Font Size */}
-            <div className="bg-slate-100 p-3 rounded-2xl space-y-2.5 text-xs">
-              {/* Mode Selector */}
-              <div className="flex items-center justify-between gap-1">
-                <span className="font-extrabold text-slate-700 text-[11px] uppercase tracking-wider">Modelo:</span>
-                <div className="grid grid-cols-2 gap-1.5 p-1 bg-white rounded-xl border border-slate-200 shadow-2xs w-full max-w-xs">
+            {/* Day Selector Buttons */}
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 p-1.5 bg-slate-100 rounded-xl">
+              {weekDays.map((d) => {
+                const isSelected = selectedDayKey === d.key;
+                const isToday = todayKey === d.key;
+                return (
                   <button
+                    key={d.key}
                     type="button"
-                    onClick={() => setLabelMode('tampa')}
-                    className={`py-1.5 px-2 rounded-lg font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      labelMode === 'tampa'
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
+                    onClick={() => setSelectedDayKey(d.key)}
+                    className={`py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer relative ${
+                      isSelected
+                        ? 'bg-orange-600 text-white shadow-xs font-black'
+                        : 'bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <Tag className="w-3.5 h-3.5" />
-                    <span>Etiqueta de Tampa</span>
+                    <span>{d.short}</span>
+                    {isToday && (
+                      <span className="block text-[9px] uppercase tracking-wider font-black opacity-90">
+                        HOJE
+                      </span>
+                    )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setLabelMode('comanda')}
-                    className={`py-1.5 px-2 rounded-lg font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      labelMode === 'comanda'
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Motorbike className="w-3.5 h-3.5" />
-                    <span>Comanda Entrega</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Width & Font Size Selectors */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
-                {/* Paper width */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-bold text-slate-600">Papel:</span>
-                  <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => setLabelPaperWidth('80mm')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-black cursor-pointer ${
-                        labelPaperWidth === '80mm' ? 'bg-amber-500 text-slate-950' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      80mm (Balcão)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLabelPaperWidth('58mm')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-black cursor-pointer ${
-                        labelPaperWidth === '58mm' ? 'bg-amber-500 text-slate-950' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      58mm (Mini)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Font Size Selector for High Legibility */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-bold text-slate-600">Letra:</span>
-                  <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => setLabelFontSize('normal')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-black cursor-pointer ${
-                        labelFontSize === 'normal' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Normal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLabelFontSize('grande')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-black flex items-center gap-1 cursor-pointer ${
-                        labelFontSize === 'grande' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <ZoomIn className="w-3 h-3" />
-                      <span>Extra Grande</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Marmita individual selector (when mode is tampa and multiple boxes exist) */}
-              {labelMode === 'tampa' && printOrderModal.items.length > 1 && (
-                <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200/80 overflow-x-auto pb-1">
-                  <span className="text-[11px] font-bold text-slate-600 shrink-0">Imprimir:</span>
-                  <button
-                    type="button"
-                    onClick={() => setLabelSelectedItemIndex('all')}
-                    className={`px-2 py-1 rounded-lg text-xs font-black cursor-pointer shrink-0 ${
-                      labelSelectedItemIndex === 'all'
-                        ? 'bg-slate-900 text-white shadow-2xs'
-                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Todas ({printOrderModal.items.length})
-                  </button>
-                  {printOrderModal.items.map((it, idx) => (
-                    <button
-                      key={it.id || idx}
-                      type="button"
-                      onClick={() => setLabelSelectedItemIndex(idx)}
-                      className={`px-2 py-1 rounded-lg text-xs font-black cursor-pointer shrink-0 ${
-                        labelSelectedItemIndex === idx
-                          ? 'bg-slate-900 text-white shadow-2xs'
-                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      Marmita {idx + 1} ({it.sizeName.toUpperCase()})
-                    </button>
-                  ))}
-                </div>
-              )}
+                );
+              })}
             </div>
 
-            {/* LIVE THERMAL PREVIEW (High Contrast, Bold, Crisp Pure Black on White) */}
-            <div className="bg-slate-200/70 p-3 sm:p-5 rounded-2xl flex items-center justify-center overflow-x-auto">
-              <div
-                className={`printable-receipt bg-white text-black border-2 border-black font-sans shadow-lg transition-all rounded-xs p-4 sm:p-5 space-y-3 ${
-                  labelPaperWidth === '58mm' ? 'w-[290px]' : 'w-[370px]'
-                }`}
-              >
-                {/* Header */}
-                <div className="text-center border-b-2 border-black pb-2 space-y-0.5">
-                  <h4 className="font-black text-lg uppercase tracking-wider text-black">
-                    {settings.restaurantName || 'MARESIA MARMITARIA'}
-                  </h4>
-                  {settings.subtitle && <p className="text-xs font-bold text-black">{settings.subtitle}</p>}
-                  <p className="text-xs font-black text-black">Tel/WhatsApp: {settings.phoneWhatsapp}</p>
-                </div>
-
-                {/* Big Order & Client Banner */}
-                <div className="bg-black text-white p-2.5 rounded text-center space-y-0.5">
-                  <div className="font-black text-xl tracking-wider">
-                    PEDIDO #{printOrderModal.orderNumber}
-                  </div>
-                  <div className="font-black text-sm uppercase">
-                    CLIENTE: {printOrderModal.customerName}
-                  </div>
-                  <div className="text-xs font-bold opacity-90">
-                    {printOrderModal.deliveryType === 'entrega'
-                      ? '🛵 ENTREGA (MOTOBOY)'
-                      : printOrderModal.deliveryType === 'retirada'
-                      ? '🏬 RETIRADA NO BALCÃO'
-                      : '🍽️ CONSUMO NO LOCAL'}
-                  </div>
-                </div>
-
-                {/* Delivery Address & Details (If Delivery Mode or has address) */}
-                {printOrderModal.tableOrAddress && (
-                  <div className="border-2 border-black rounded p-2.5 bg-slate-50 space-y-1">
-                    <div className="text-xs font-black uppercase text-black">
-                      📍 Endereço de Entrega:
-                    </div>
-                    <div className="text-sm font-black text-black leading-snug">
-                      {printOrderModal.tableOrAddress.toUpperCase()}
-                    </div>
-                    {printOrderModal.customerPhone && (
-                      <div className="text-xs font-bold text-black pt-0.5">
-                        📞 Telefone: {printOrderModal.customerPhone}
-                      </div>
-                    )}
-                  </div>
+            {/* Editing Card for Selected Day */}
+            <div className="bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                <span className="font-black text-slate-900 text-sm flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-orange-600" />
+                  <span>Cardápio de: <strong className="text-orange-600">{activeMenu?.dayLabel}</strong></span>
+                </span>
+                {todayKey === selectedDayKey && (
+                  <span className="bg-emerald-100 text-emerald-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">
+                    Ativo Hoje no PDV
+                  </span>
                 )}
+              </div>
 
-                {/* Marmitas Content (Filtered or All) */}
-                <div className="space-y-3 border-y-2 border-black py-2.5">
-                  {(labelMode === 'tampa' && typeof labelSelectedItemIndex === 'number' && printOrderModal.items[labelSelectedItemIndex]
-                    ? [printOrderModal.items[labelSelectedItemIndex]]
-                    : printOrderModal.items
-                  ).map((i, idx) => {
-                    const realIdx = typeof labelSelectedItemIndex === 'number' ? labelSelectedItemIndex : idx;
-                    return (
-                      <div
-                        key={i.id || idx}
-                        className="border-2 border-black rounded p-3 space-y-2 bg-white"
-                      >
-                        {/* Marmita Title */}
-                        <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
-                          <span className="font-black text-base uppercase text-black">
-                            🍱 {i.quantity}x {i.sizeName.toUpperCase()}
-                          </span>
-                          {printOrderModal.items.length > 1 && (
-                            <span className="bg-black text-white px-2 py-0.5 rounded text-xs font-black">
-                              {realIdx + 1} de {printOrderModal.items.length}
-                            </span>
-                          )}
-                        </div>
+              {/* Carnes do Dia Field */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black text-slate-800">
+                  🥩 Carnes / Pratos Principais do Dia (separados por vírgula):
+                </label>
+                <textarea
+                  rows={2}
+                  value={editCarnes}
+                  onChange={(e) => setEditCarnes(e.target.value)}
+                  placeholder="Ex: Bife Acebolado, Filé de Frango Grelhado, Feijoada Completa, Costelinha Suína"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Estas carnes aparecerão como opções clicáveis na tela de montagem da marmita.
+                </p>
+              </div>
 
-                        {/* CARNES - DESTAQUE MÁXIMO */}
-                        <div className="bg-slate-100 border-l-4 border-black p-2 rounded-xs">
-                          <div className="text-[11px] font-black uppercase text-black">
-                            🥩 CARNES / PROTEÍNAS:
-                          </div>
-                          <div className={`font-black uppercase text-black leading-tight ${labelFontSize === 'grande' ? 'text-base' : 'text-sm'}`}>
-                            {i.proteinas.length > 0 ? i.proteinas.join(' + ') : 'Sem carnes especificadas'}
-                          </div>
-                        </div>
+              {/* Acompanhamentos do Dia Field */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black text-slate-800">
+                  🥗 Acompanhamentos & Guarnições do Dia (separados por vírgula):
+                </label>
+                <textarea
+                  rows={2}
+                  value={editAcompanhamentos}
+                  onChange={(e) => setEditAcompanhamentos(e.target.value)}
+                  placeholder="Ex: Arroz Branco, Feijão Carioca, Farofa da Casa, Macarrão, Vinagrete, Purê de Batatas"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
 
-                        {/* Acompanhamentos */}
-                        <div className={`space-y-1 text-black ${labelFontSize === 'grande' ? 'text-xs' : 'text-[11px]'}`}>
-                          <div>
-                            <strong>🍚 Base:</strong> {i.bases.join(', ')} | <strong>Feijão:</strong> {i.feijoes.join(', ')}
-                          </div>
-                          {i.guarnicoes.length > 0 && (
-                            <div>
-                              <strong>🥗 Guarnições:</strong> {i.guarnicoes.join(', ')}
-                            </div>
-                          )}
-                          {i.saladas.length > 0 && (
-                            <div>
-                              <strong>🥬 Salada:</strong> {i.saladas.join(', ')}
-                            </div>
-                          )}
-                          {i.adicionais.length > 0 && (
-                            <div>
-                              <strong>⭐ Extras:</strong> {i.adicionais.map((a) => a.name).join(', ')}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Observações da Marmita (Caixa de Alerta) */}
-                        {i.notes && (
-                          <div className="border-2 border-dashed border-black bg-amber-100/80 p-2 rounded text-xs font-black text-black">
-                            ⚠️ OBS DA MARMITA: {i.notes.toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* Bebidas do Pedido */}
-                  {printOrderModal.beverages.length > 0 && (
-                    <div className="border-2 border-black rounded p-2.5 bg-slate-50 space-y-1">
-                      <div className="text-xs font-black uppercase text-black">
-                        🥤 Bebidas do Pedido:
-                      </div>
-                      <div className="text-sm font-black text-black">
-                        {printOrderModal.beverages.map((b) => `${b.quantity}x ${b.name}`).join(', ')}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Observação Geral do Pedido */}
-                  {printOrderModal.generalNotes && (
-                    <div className="border-2 border-dashed border-black bg-amber-100/80 p-2.5 rounded text-xs font-black text-black">
-                      ⚠️ OBSERVAÇÃO GERAL: {printOrderModal.generalNotes.toUpperCase()}
-                    </div>
-                  )}
+              {/* Destaque & Observações */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    ⭐ Destaque do Prato Especial (Opcional):
+                  </label>
+                  <input
+                    type="text"
+                    value={editDestaque}
+                    onChange={(e) => setEditDestaque(e.target.value)}
+                    placeholder="Ex: Feijoada Completa com Couve e Torresmo"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
                 </div>
 
-                {/* Financial Summary & Payment */}
-                <div className="border-2 border-black rounded p-2.5 space-y-1.5 bg-slate-50 text-xs text-black">
-                  <div className="flex justify-between font-bold">
-                    <span>Subtotal:</span>
-                    <span>R$ {printOrderModal.subtotal.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                  {printOrderModal.deliveryFee > 0 && (
-                    <div className="flex justify-between font-bold">
-                      <span>Taxa de Entrega:</span>
-                      <span>R$ {printOrderModal.deliveryFee.toFixed(2).replace('.', ',')}</span>
-                    </div>
-                  )}
-                  {printOrderModal.discount > 0 && (
-                    <div className="flex justify-between font-bold">
-                      <span>Desconto:</span>
-                      <span>- R$ {printOrderModal.discount.toFixed(2).replace('.', ',')}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between font-black text-base border-t-2 border-black pt-1">
-                    <span>TOTAL A PAGAR:</span>
-                    <span>R$ {printOrderModal.total.toFixed(2).replace('.', ',')}</span>
-                  </div>
-
-                  <div className="bg-black text-white p-2 rounded text-center space-y-0.5 mt-1">
-                    <div className="font-black text-xs uppercase tracking-wider">
-                      FORMA: {printOrderModal.paymentMethod.toUpperCase()} ({printOrderModal.isPaid ? 'PAGO / LIQUIDADO' : 'PAGAR NA ENTREGA'})
-                    </div>
-                    {printOrderModal.changeFor && (
-                      <div className="font-black text-xs text-amber-300">
-                        LEVAR TROCO PARA R$ {printOrderModal.changeFor}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="text-center pt-1 border-t border-dashed border-black text-[10px] font-bold text-black">
-                  🔥 Bom Apetite • Obrigado pela Preferência! 🔥
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    📝 Observações / Recado no WhatsApp:
+                  </label>
+                  <input
+                    type="text"
+                    value={editObservacoes}
+                    onChange={(e) => setEditObservacoes(e.target.value)}
+                    placeholder="Ex: Acompanha vinagrete e farofa crocante"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
                 </div>
               </div>
-            </div>
 
-            {/* Bottom Actions */}
-            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={handlePrintMarmitaLabel}
-                disabled={isPrintingLabel}
-                className="w-full sm:flex-2 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all"
-              >
-                <Printer className="w-4 h-4 text-amber-400" />
-                <span>{isPrintingLabel ? 'Enviando p/ Impressora...' : 'Imprimir Etiqueta Térmica'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleShareMarmitaWhatsApp}
-                className="w-full sm:flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center space-x-1.5 cursor-pointer shadow-md transition-all"
-              >
-                <Send className="w-4 h-4" />
-                <span>WhatsApp</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPrintOrderModal(null)}
-                className="w-full sm:w-auto px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer transition-colors"
-              >
-                Fechar
-              </button>
+              {/* Save Button */}
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveDayMenu}
+                  className="bg-orange-600 hover:bg-orange-500 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md transition-all flex items-center space-x-1.5 cursor-pointer active:scale-95"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Salvar Cardápio de {activeMenu?.dayLabel}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Motoboy dispatch modal */}
-      {motoboyModalOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-5 border border-slate-200 space-y-4">
-            <h4 className="font-black text-slate-900 text-base">Despachar Entrega p/ Motoboy</h4>
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">Nome do Motoboy / Entregador:</label>
-              <input
-                type="text"
-                value={motoboyInputName}
-                onChange={(e) => setMotoboyInputName(e.target.value)}
-                placeholder="Ex: Marcio / Carlos"
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
+      {/* Print Thermal Modal */}
+      {printOrderModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 flex items-center justify-center p-3">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-4 border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-black text-slate-900 text-sm">
+                Imprimir Comanda #{printOrderModal.orderNumber}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPrintOrderModal(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-black text-xs flex items-center justify-center cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
-            <div className="flex items-center gap-2">
+
+            <p className="text-xs text-slate-600">
+              Cliente: <strong>{printOrderModal.customerName}</strong> • Total: <strong>R$ {printOrderModal.total.toFixed(2).replace('.', ',')}</strong>
+            </p>
+
+            <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  onUpdateOrderStatus(motoboyModalOrder.id, 'saiu_para_entrega', motoboyInputName || 'Motoboy');
-                  setMotoboyModalOrder(null);
-                  showToast(`🛵 Pedido #${motoboyModalOrder.orderNumber} despachado com motoboy ${motoboyInputName}!`);
-                }}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-black text-xs cursor-pointer"
+                onClick={handlePrint}
+                disabled={isPrintingLabel}
+                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl font-black text-xs flex items-center justify-center space-x-1.5 cursor-pointer"
               >
-                Confirmar Saída p/ Entrega
+                <Printer className="w-4 h-4" />
+                <span>{isPrintingLabel ? 'Imprimindo...' : 'Imprimir Térmica'}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setMotoboyModalOrder(null)}
-                className="px-3 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer"
-              >
-                Voltar
-              </button>
+
+              {printOrderModal.customerPhone && (
+                <button
+                  type="button"
+                  onClick={handleShareWhatsApp}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2.5 rounded-xl font-black text-xs flex items-center justify-center space-x-1 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>WhatsApp</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

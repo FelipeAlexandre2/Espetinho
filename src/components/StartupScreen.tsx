@@ -51,16 +51,15 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
       {/* Top Bar / Brand & Operator Info */}
       <header className="max-w-6xl w-full mx-auto px-4 sm:px-6 pt-6 sm:pt-8 flex items-center justify-between z-10">
         <div className="flex items-center space-x-3">
-          <div 
-            onClick={onOpenLogoModal}
-            className="w-11 h-11 rounded-2xl overflow-hidden shadow-lg border border-slate-700 bg-[#1e2749] flex items-center justify-center cursor-pointer transition-transform hover:scale-105"
-            title="Clique para trocar a logo do Maresia"
-          >
-            {logo ? (
-              <img src={logo} alt="Maresia Logo" className="w-full h-full object-cover" />
-            ) : (
-              <Store className="w-6 h-6 text-amber-400" />
-            )}
+          <div className="w-11 h-11 rounded-2xl overflow-hidden shadow-lg border border-slate-700 bg-[#1e2749] flex items-center justify-center select-none">
+            <img 
+              src={logo || '/logo/logo.svg'} 
+              alt="Maresia Logo" 
+              onError={(e) => {
+                e.currentTarget.src = '/logo/logo.svg';
+              }}
+              className="w-full h-full object-cover" 
+            />
           </div>
           <div>
             <h1 className="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-1.5">

@@ -130,7 +130,7 @@ export function AccessDeniedView({
               </div>
 
               <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                Digite o PIN de 4 dígitos de um <b>Administrador</b> ou <b>Gerente</b> para autorizar esta ação:
+                Digite a senha/PIN (3 a 8 dígitos) de um <b>Administrador</b> ou <b>Gerente</b> para autorizar esta ação:
               </p>
 
               {errorMsg && (
@@ -143,13 +143,13 @@ export function AccessDeniedView({
               <div className="mb-4">
                 <input
                   type="password"
-                  maxLength={6}
+                  maxLength={8}
                   value={supervisorPin}
                   onChange={(e) => {
-                    setSupervisorPin(e.target.value);
+                    setSupervisorPin(e.target.value.slice(0, 8));
                     setErrorMsg(null);
                   }}
-                  placeholder="PIN do Administrador"
+                  placeholder="PIN (3 a 8 dígitos)"
                   className="w-full text-center tracking-[0.4em] font-mono text-xl py-3 rounded-xl bg-slate-950 border border-slate-700 text-amber-400 focus:outline-none focus:border-amber-400"
                   autoFocus
                 />

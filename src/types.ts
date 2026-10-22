@@ -154,7 +154,8 @@ export type SystemPermission =
   | 'view_reports'
   | 'manage_users'
   | 'view_audit_logs'
-  | 'access_marmitaria';
+  | 'access_marmitaria'
+  | 'manage_system_photos';
 
 export type LogCategory = 'login' | 'cardapio' | 'caixa' | 'pedidos' | 'estoque' | 'usuarios' | 'sistema';
 
@@ -267,6 +268,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Record<SystemPermission,
     manage_users: true,
     view_audit_logs: true,
     access_marmitaria: true,
+    manage_system_photos: true,
   },
   gerente: {
     access_caixa: true,
@@ -280,6 +282,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Record<SystemPermission,
     manage_users: false,
     view_audit_logs: true,
     access_marmitaria: true,
+    manage_system_photos: false,
   },
   caixa: {
     access_caixa: true,
@@ -293,6 +296,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Record<SystemPermission,
     manage_users: false,
     view_audit_logs: false,
     access_marmitaria: false,
+    manage_system_photos: false,
   },
   churrasqueiro: {
     access_caixa: false,
@@ -306,6 +310,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Record<SystemPermission,
     manage_users: false,
     view_audit_logs: false,
     access_marmitaria: false,
+    manage_system_photos: false,
   },
   garcom: {
     access_caixa: false,
@@ -319,10 +324,17 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Record<SystemPermission,
     manage_users: false,
     view_audit_logs: false,
     access_marmitaria: false,
+    manage_system_photos: false,
   }
 };
 
 export const PERMISSION_DEFINITIONS: { key: SystemPermission; label: string; category: string; description: string }[] = [
+  {
+    key: 'manage_system_photos',
+    label: '🖼️ Alterar Foto e Logo do Sistema (Restrito)',
+    category: 'Marca & Logotipo',
+    description: 'Permissão exclusiva para alterar a foto do logotipo, fotos da marca e identidade visual do sistema Maresia. Apenas você/proprietário pode mexer.'
+  },
   {
     key: 'access_marmitaria',
     label: '🍱 Módulo Marmitaria & Marmitex',
@@ -443,6 +455,14 @@ export function canUserAccessMarmitaria(user: AppUser | null | undefined): boole
 }
 
 /**
+ * Helper to check if a user is permitted to change/manage the system logo and branding photos.
+ * Strictly restricted to owner / administrator with manage_system_photos permission.
+ */
+export function canUserManagePhotos(user: AppUser | null | undefined): boolean {
+  return hasPermission(user, 'manage_system_photos');
+}
+
+/**
  * Checks if a user is permitted to create/launch orders on tables.
  * Permitted for: Admin, Gerente, Caixa, Garçom, or anyone with access_caixa.
  */
@@ -537,6 +557,17 @@ export function getDefaultTabForUser(user: AppUser): TabType {
  * ========================================================================= */
 
 export type MarmitaSize = 'P' | 'M' | 'G' | 'executiva';
+
+export type DayOfWeekKey = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';
+
+export interface MarmitaDailyMenu {
+  dayKey: DayOfWeekKey;
+  dayLabel: string;
+  carnes: string[];
+  acompanhamentos: string[];
+  destaquePrato?: string;
+  observacoes?: string;
+}
 
 export interface MarmitaSizeConfig {
   size: MarmitaSize;

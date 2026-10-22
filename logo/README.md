@@ -1,9 +1,13 @@
-# 📂 Pasta para a Logo do Cliente (Maresia)
+# 🖼️ Logo Oficial do Sistema (Maresia)
 
-Coloque aqui a logo do cliente para o GitHub!
+Esta pasta é o local exclusivo onde a logo do sistema fica cadastrada no GitHub.
 
-### Como adicionar a logo:
-1. Adicione o arquivo da logo do cliente com o nome:
-   - `logo.png` (ou `logo.jpg`, `logo.svg`, `logo-cliente.png`)
-2. Esta pasta está sincronizada com `public/logo/logo.png`.
-3. Você também pode alterar a logo diretamente na tela do sistema clicando no botão de **Câmera** sobre a logo!
+### 📌 Como funciona:
+- O sistema carrega a imagem **diretamente deste arquivo** (`logo.png`).
+- **Ninguém consegue mudar pela tela do sistema** (todos os botões e opções de troca foram removidos da interface para evitar bagunça).
+- Somente você, pelo repositório do GitHub, tem o controle de colocar ou atualizar a logo.
+
+### 📁 Arquivo oficial da logo:
+- Nome do arquivo padrão: **`logo.svg`**
+- Caminho: `public/logo/logo.svg` (ou `logo/logo.svg`)
+- O sistema já vem com a logo oficial do Maresia ativa! Se desejar colocar uma nova imagem pelo GitHub, pode salvar como `logo.svg`, `logo.png` ou `logo.jpg` nesta pasta.

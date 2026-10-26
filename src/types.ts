@@ -83,10 +83,16 @@ export interface ReceiptSettings {
   phone?: string;
   footerMessage?: string;
   autoCut?: boolean;
+  pixKey?: string;
+  pixKeyType?: 'cnpj' | 'celular' | 'email' | 'aleatoria';
+  defaultPaperWidth?: ReceiptPaperWidth;
+  fontSize?: ReceiptFontSize;
+  autoPrintOnOrderCreate?: boolean;
 }
 
+export type ReceiptFontSize = 'normal' | 'grande';
 export type ReceiptPaperWidth = '80mm' | '58mm' | 'a4';
-export type ReceiptType = 'cliente' | 'cozinha' | 'pre_conta';
+export type ReceiptType = 'cliente' | 'cozinha' | 'pre_conta' | 'etiqueta_mesa';
 
 export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   restaurantName: 'MARESIA',
@@ -96,6 +102,11 @@ export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   phone: '(67) 99125-6083',
   footerMessage: 'Instagram: @maresia • Volte sempre! 🔥',
   autoCut: true,
+  pixKey: '(67) 99125-6083',
+  pixKeyType: 'celular',
+  defaultPaperWidth: '80mm',
+  fontSize: 'grande',
+  autoPrintOnOrderCreate: true,
 };
 
 export interface StockItem {
@@ -130,6 +141,7 @@ export interface CashShift {
 export type SystemModule = 'espetos' | 'marmitaria';
 
 export type TabType = 
+  | 'mesas'
   | 'caixa' 
   | 'pedidos' 
   | 'churrasqueira' 
@@ -181,7 +193,8 @@ export type LogActionType =
   | 'usuario_excluido' 
   | 'usuario_permissao_alterada'
   | 'usuario_status_alterado'
-  | 'sistema_backup';
+  | 'sistema_backup'
+  | 'sistema_config_alterada';
 
 export interface SystemLog {
   id: string;
@@ -365,12 +378,7 @@ export const PERMISSION_DEFINITIONS: { key: SystemPermission; label: string; cat
     category: 'Vendas & Caixa',
     description: 'Estornar itens lançados ou cancelar comandas ativas.'
   },
-  {
-    key: 'access_churrasqueira',
-    label: 'KDS Cozinha & Churrasqueira',
-    category: 'Produção',
-    description: 'Acessar a fila da grelha, alterar status de preparo e chamar garçom.'
-  },
+
   {
     key: 'manage_menu',
     label: 'Gerenciar Cardápio & Preços',
@@ -459,6 +467,8 @@ export function canUserAccessMarmitaria(user: AppUser | null | undefined): boole
  * Strictly restricted to owner / administrator with manage_system_photos permission.
  */
 export function canUserManagePhotos(user: AppUser | null | undefined): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
   return hasPermission(user, 'manage_system_photos');
 }
 
@@ -503,6 +513,8 @@ export function getTabRequiredPermission(tab: TabType): SystemPermission | null 
  */
 export function getTabTitle(tab: TabType): string {
   switch (tab) {
+    case 'mesas':
+      return 'Mapa de Mesas & Atendimento';
     case 'cardapio':
       return 'Cardápio & Produtos';
     case 'caixa':
@@ -531,17 +543,11 @@ export function getTabTitle(tab: TabType): string {
  * Returns the default starting tab for a user according to their permissions and operational role.
  */
 export function getDefaultTabForUser(user: AppUser): TabType {
-  if (user.role === 'churrasqueiro' || (hasPermission(user, 'access_churrasqueira') && !hasPermission(user, 'access_caixa'))) {
-    return 'churrasqueira';
-  }
-  if (user.role === 'garcom') {
+  if (user.role === 'garcom' || user.role === 'churrasqueiro') {
     return 'pedidos';
   }
   if (hasPermission(user, 'access_caixa')) {
     return 'caixa';
-  }
-  if (hasPermission(user, 'access_churrasqueira')) {
-    return 'churrasqueira';
   }
   if (hasPermission(user, 'manage_stock')) {
     return 'estoque';

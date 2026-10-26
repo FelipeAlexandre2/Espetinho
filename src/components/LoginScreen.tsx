@@ -5,6 +5,7 @@ import {
   UserPlus, CheckCircle2, KeyRound
 } from 'lucide-react';
 import { SYSTEM_LOGO_PATH, saveUsers } from '../lib/storage';
+import { BrandLogo } from './BrandLogo';
 
 interface LoginScreenProps {
   users: AppUser[];
@@ -270,15 +271,12 @@ export function LoginScreen({
       {/* Main Login Card - Clean and permanent: Logo fixed from GitHub path, no buttons to change it */}
       <div className="w-full max-w-sm sm:max-w-[400px] bg-white rounded-[32px] p-7 sm:p-8 shadow-2xl border border-slate-100 flex flex-col items-center relative z-10 animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Circular Logo Badge (Fixed from GitHub: /logo/logo.png - Nobody can change it from the UI) */}
+        {/* Circular Logo Badge (Padrão e limpa) */}
         <div className="-mt-3 mb-4 select-none">
           <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shadow-xl ring-4 ring-slate-100 bg-[#1e2749] flex items-center justify-center">
-            <img 
-              src={logo || SYSTEM_LOGO_PATH} 
-              alt="Maresia Logo" 
-              onError={(e) => {
-                e.currentTarget.src = '/logo/logo.svg';
-              }}
+            <BrandLogo 
+              src={logo} 
+              alt="Maresia Logo & Capa" 
               className="w-full h-full object-cover rounded-full"
             />
           </div>

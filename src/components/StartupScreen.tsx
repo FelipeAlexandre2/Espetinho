@@ -1,11 +1,12 @@
 import React from 'react';
-import { SystemModule, AppUser, ROLE_CONFIG, hasPermission } from '../types';
+import { SystemModule, AppUser, ROLE_CONFIG, hasPermission, canUserManagePhotos } from '../types';
 import { 
   Flame, ChefHat, Sparkles, ArrowRight, 
   CheckCircle2, UtensilsCrossed, Package, 
   Clock, DollarSign, Users, LogOut, ChevronRight,
   ShieldCheck, Smartphone, Printer, Store, Lock
 } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 interface StartupScreenProps {
   currentUser: AppUser;
@@ -28,6 +29,7 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
 }) => {
   const [rememberChoice, setRememberChoice] = React.useState<boolean>(false);
   const canAccessMarmitaria = hasPermission(currentUser, 'access_marmitaria');
+  const canManagePhotos = canUserManagePhotos(currentUser);
 
   // Keyboard shortcuts (1 for Espetos, 2 for Marmitaria if permitted)
   React.useEffect(() => {
@@ -51,15 +53,23 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
       {/* Top Bar / Brand & Operator Info */}
       <header className="max-w-6xl w-full mx-auto px-4 sm:px-6 pt-6 sm:pt-8 flex items-center justify-between z-10">
         <div className="flex items-center space-x-3">
-          <div className="w-11 h-11 rounded-2xl overflow-hidden shadow-lg border border-slate-700 bg-[#1e2749] flex items-center justify-center select-none">
-            <img 
-              src={logo || '/logo/logo.svg'} 
-              alt="Maresia Logo" 
-              onError={(e) => {
-                e.currentTarget.src = '/logo/logo.svg';
-              }}
+          <div 
+            onClick={canManagePhotos ? onOpenLogoModal : undefined}
+            title={canManagePhotos ? "Clique para alterar a Foto de Capa / Logo do sistema (Exclusivo Administrador)" : "Maresia Gastronomia"}
+            className={`w-11 h-11 rounded-2xl overflow-hidden shadow-lg border border-slate-700 bg-[#1e2749] flex items-center justify-center select-none relative group ${
+              canManagePhotos && onOpenLogoModal ? 'cursor-pointer hover:ring-2 hover:ring-amber-500/80 transition' : ''
+            }`}
+          >
+            <BrandLogo 
+              src={logo} 
+              alt="Maresia Logo & Capa" 
               className="w-full h-full object-cover" 
             />
+            {canManagePhotos && onOpenLogoModal && (
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition rounded-2xl">
+                <span className="text-[9px] text-amber-300 font-black uppercase">Capa</span>
+              </div>
+            )}
           </div>
           <div>
             <h1 className="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-1.5">

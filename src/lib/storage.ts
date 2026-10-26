@@ -21,16 +21,28 @@ const KEYS = {
   LOGO: 'maresia_logo_v1',
 };
 
-// Caminho oficial da logo no repositório GitHub
-export const SYSTEM_LOGO_PATH = '/logo/logo.svg';
-export const GITHUB_LOGO_PATH = '/logo/logo.svg';
+// Caminhos oficiais da Logo e Capa do Sistema no repositório GitHub
+export const SYSTEM_COVER_PATH = '/logo/capa.png';
+export const SYSTEM_LOGO_PATH = '/logo/capa.png';
+export const GITHUB_LOGO_PATH = '/logo/capa.png';
 export const GITHUB_LOGO_SVG_PATH = '/logo/logo.svg';
-export const DEFAULT_MARESIA_LOGO = '/logo/logo.svg';
+export const DEFAULT_MARESIA_LOGO = '/logo/capa.png';
+
+export const SYSTEM_LOGO_FALLBACKS: string[] = [
+  '/logo/capa.png',
+  '/capa.png',
+  '/logo/capa.jpg',
+  '/capa.jpg',
+  '/logo/logo.png',
+  '/logo/logo.jpg',
+  '/logo/logo.svg',
+  '/logo.svg',
+];
 
 export function loadMaresiaLogo(): string {
   try {
     const saved = localStorage.getItem(KEYS.LOGO);
-    if (saved && !saved.includes('logo.png') && !saved.includes('logo.jpg')) {
+    if (saved) {
       return saved;
     }
   } catch (e) {

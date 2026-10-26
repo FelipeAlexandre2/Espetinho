@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { db } from './src/db';
 import { products, orders, stockItems, cashShifts, users, auditLogs } from './src/db/schema';
@@ -675,6 +676,38 @@ async function startServer() {
       }
     }
     res.json(shift);
+  });
+
+  // ================= UPLOAD CAPA / LOGO DO SISTEMA =================
+  // Salva diretamente no disco em public/logo/capa.png e public/capa.png
+  app.post('/api/upload-capa', express.json({ limit: '25mb' }), async (req, res) => {
+    try {
+      const { imageData } = req.body;
+      if (!imageData || typeof imageData !== 'string') {
+        return res.status(400).json({ error: 'Nenhuma imagem recebida' });
+      }
+
+      // Check if base64 data URL
+      const matches = imageData.match(/^data:image\/([a-zA-Z+]+);base64,(.+)$/);
+      if (matches) {
+        const buffer = Buffer.from(matches[2], 'base64');
+        const publicLogoDir = path.join(process.cwd(), 'public', 'logo');
+        const rootLogoDir = path.join(process.cwd(), 'logo');
+        if (!fs.existsSync(publicLogoDir)) fs.mkdirSync(publicLogoDir, { recursive: true });
+        if (!fs.existsSync(rootLogoDir)) fs.mkdirSync(rootLogoDir, { recursive: true });
+
+        fs.writeFileSync(path.join(publicLogoDir, 'capa.png'), buffer);
+        fs.writeFileSync(path.join(process.cwd(), 'public', 'capa.png'), buffer);
+        fs.writeFileSync(path.join(rootLogoDir, 'capa.png'), buffer);
+        console.log('✅ Capa do sistema salva com sucesso em public/logo/capa.png');
+        return res.json({ success: true, path: '/logo/capa.png' });
+      }
+
+      return res.json({ success: true, path: imageData });
+    } catch (err: any) {
+      console.error('Erro ao salvar capa:', err);
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // Explicit static routes for GitHub logo & photos directory

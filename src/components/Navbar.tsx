@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { TabType, CashShift, AppUser, ROLE_CONFIG, hasPermission, SystemModule } from '../types';
+import { TabType, CashShift, AppUser, ROLE_CONFIG, hasPermission, SystemModule, canUserManagePhotos } from '../types';
 import { 
-  UtensilsCrossed, ClipboardList, Flame, DollarSign, Lock, Unlock, 
+  UtensilsCrossed, Utensils, ClipboardList, Flame, DollarSign, Lock, Unlock, 
   TrendingUp, Sparkles, Package, BarChart3, Users, UserCheck, Shield, History,
   LogOut, CheckCircle2, KeyRound, X, ChevronDown, ChefHat, RefreshCw, LayoutGrid,
   Settings, ChevronRight
 } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 interface NavbarProps {
   activeTab: TabType;
@@ -73,6 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const canAccessUsuarios = hasPermission(currentUser, 'manage_users');
   const canAccessAuditoria = hasPermission(currentUser, 'view_audit_logs');
   const canAccessMarmitaria = hasPermission(currentUser, 'access_marmitaria');
+  const canManagePhotos = canUserManagePhotos(currentUser);
 
   // Check if current active tab is one of the settings tabs (Equipe & Usuários, Auditoria)
   const isSettingsTabActive = activeTab === 'usuarios' || activeTab === 'auditoria';
@@ -119,15 +121,23 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo & Brand */}
           <div className="flex items-center space-x-2.5 sm:space-x-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shrink-0 border border-slate-700 bg-[#1e2749] flex items-center justify-center select-none">
-              <img 
-                src={logo || '/logo/logo.svg'} 
-                alt="Maresia Logo" 
-                onError={(e) => {
-                  e.currentTarget.src = '/logo/logo.svg';
-                }}
+            <div 
+              onClick={canManagePhotos ? onOpenLogoModal : undefined}
+              title={canManagePhotos ? "Clique para alterar a Foto de Capa / Logo do sistema (Exclusivo Administrador)" : "Maresia Gastronomia"}
+              className={`w-10 h-10 rounded-xl overflow-hidden shadow-lg shrink-0 border border-slate-700 bg-[#1e2749] flex items-center justify-center select-none relative group ${
+                canManagePhotos && onOpenLogoModal ? 'cursor-pointer hover:ring-2 hover:ring-amber-500/80 transition' : ''
+              }`}
+            >
+              <BrandLogo 
+                src={logo} 
+                alt="Maresia Logo & Capa" 
                 className="w-full h-full object-cover" 
               />
+              {canManagePhotos && onOpenLogoModal && (
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition rounded-xl">
+                  <span className="text-[9px] text-amber-300 font-black uppercase">Capa</span>
+                </div>
+              )}
             </div>
             <div>
               <div className="flex items-center space-x-2">
@@ -199,6 +209,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <RefreshCw className="w-3 h-3 mr-1" />
                   <span>Hub</span>
+                </button>
+              )}
+
+              {canManagePhotos && onOpenLogoModal && (
+                <button
+                  id="navbar-btn-change-capa"
+                  type="button"
+                  onClick={onOpenLogoModal}
+                  className="hidden xl:flex items-center px-2 py-1 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-slate-800 text-[11px] font-bold transition cursor-pointer ml-1 gap-1 border border-transparent hover:border-amber-500/30"
+                  title="Alterar Logo ou Foto de Capa do Sistema (Exclusivo Administrador)"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Capa</span>
                 </button>
               )}
             </div>
@@ -307,6 +330,25 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="hidden sm:block bg-slate-950/90 border-t border-slate-800 shadow-inner">
           <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
             <nav className="flex items-center space-x-1 sm:space-x-1.5 py-2 overflow-x-auto scrollbar-none touch-pan-x whitespace-nowrap" aria-label="Tabs">
+            {/* Tab 0: Mesas & Atendimento */}
+            <button
+              id="navbar-btn-tab-mesas"
+              onClick={() => setActiveTab('mesas')}
+              className={`flex items-center space-x-1.5 sm:space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer shrink-0 active:scale-95 ${
+                activeTab === 'mesas'
+                  ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400/50'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:text-white'
+              }`}
+            >
+              <Utensils className="w-4 h-4" />
+              <span>🪑 Mesas</span>
+              {activeOrdersCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 text-[10px] font-black rounded-full bg-rose-600 text-white">
+                  {activeOrdersCount}
+                </span>
+              )}
+            </button>
+
             {/* Tab 1: Cardápio */}
             <button
               onClick={() => setActiveTab('cardapio')}
@@ -350,27 +392,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               {activeOrdersCount > 0 && (
                 <span className="ml-1 px-2 py-0.5 text-[10px] font-black rounded-full bg-red-500 text-white">
                   {activeOrdersCount}
-                </span>
-              )}
-            </button>
-
-            {/* Tab 4: Churrasqueira e Cozinha */}
-            <button
-              onClick={() => setActiveTab('churrasqueira')}
-              className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap cursor-pointer shrink-0 active:scale-95 ${
-                activeTab === 'churrasqueira'
-                  ? 'bg-red-500/10 text-red-500 border border-red-500/20 shadow-xs'
-                  : !canAccessChurrasqueira
-                  ? 'text-slate-500 hover:text-slate-300 opacity-75'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Flame className={`w-4 h-4 ${grillItemsCount > 0 ? 'text-orange-400 animate-bounce' : ''}`} />
-              <span>Cozinha & Brasa</span>
-              {!canAccessChurrasqueira && <Lock className="w-3 h-3 text-orange-500/70 ml-0.5" />}
-              {grillItemsCount > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-[10px] font-black rounded-full bg-orange-500 text-white animate-pulse">
-                  {grillItemsCount}
                 </span>
               )}
             </button>
@@ -806,6 +827,26 @@ export const Navbar: React.FC<NavbarProps> = ({
           </>
         ) : (
           <>
+            {/* Mobile Tab 0: Mesas */}
+            <button
+              onClick={() => setActiveTab('mesas')}
+              className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all cursor-pointer active:scale-95 min-w-0 ${
+                activeTab === 'mesas'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-2xs'
+                  : 'text-amber-400 hover:text-white'
+              }`}
+            >
+              <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
+                <Utensils className="w-4 h-4" />
+                {activeOrdersCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 px-1 py-0.1 text-[8px] font-black rounded-full bg-rose-600 text-white shadow-2xs">
+                    {activeOrdersCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[8px] font-extrabold leading-none mt-1 truncate w-full text-center">Mesas</span>
+            </button>
+
             {/* Mobile Tab 1: Cardápio */}
             <button
               onClick={() => setActiveTab('cardapio')}
@@ -857,29 +898,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
               <span className="text-[8px] font-extrabold leading-none mt-1 truncate w-full text-center">Pedidos</span>
-            </button>
-
-            {/* Mobile Tab 4: Cozinha */}
-            <button
-              onClick={() => setActiveTab('churrasqueira')}
-              className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all cursor-pointer active:scale-95 min-w-0 ${
-                activeTab === 'churrasqueira'
-                  ? 'bg-slate-800/90 text-orange-400 font-extrabold shadow-2xs border border-orange-500/20'
-                  : !canAccessChurrasqueira
-                  ? 'text-slate-600'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
-                <Flame className={`w-4 h-4 ${grillItemsCount > 0 ? 'text-orange-400 animate-bounce' : ''}`} />
-                {!canAccessChurrasqueira && <Lock className="w-2.5 h-2.5 text-orange-500/80 absolute -top-1 -right-1" />}
-                {grillItemsCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2 px-1 py-0.1 text-[8px] font-black rounded-full bg-orange-500 text-white shadow-2xs animate-pulse">
-                    {grillItemsCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[8px] font-extrabold leading-none mt-1 truncate w-full text-center">Cozinha</span>
             </button>
 
             {/* Mobile Tab 5: Estoque */}

@@ -7,25 +7,33 @@ import {
   openReceiptInNewWindow, 
   formatReceiptWhatsAppText, 
   formatReceiptRawText, 
-  shareReceiptNative 
+  shareReceiptNative,
+  isSkewerItem
 } from '../utils/printReceipt';
 import { 
   Printer, X, Check, Share2, Copy, ExternalLink, Settings, 
   Smartphone, Monitor, Flame, Utensils, FileText, CheckCircle2, ChevronRight,
-  ZoomIn
+  ZoomIn, Tag
 } from 'lucide-react';
 
 interface ReceiptModalProps {
   order: Order | null;
   onClose: () => void;
+  initialType?: ReceiptType;
+  autoPrint?: boolean;
 }
 
-export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) => {
+export const ReceiptModal: React.FC<ReceiptModalProps> = ({ 
+  order, 
+  onClose,
+  initialType = 'etiqueta_mesa',
+  autoPrint = false
+}) => {
   if (!order) return null;
 
   // Print format & profile states
   const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>('80mm');
-  const [receiptType, setReceiptType] = useState<ReceiptType>('cliente');
+  const [receiptType, setReceiptType] = useState<ReceiptType>(initialType);
   const [fontSize, setFontSize] = useState<'normal' | 'grande'>('grande');
   const [settings, setSettings] = useState<ReceiptSettings>(getReceiptSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -34,8 +42,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
 
   // Synchronize settings with localStorage
   useEffect(() => {
-    setSettings(getReceiptSettings());
+    const loaded = getReceiptSettings();
+    setSettings(loaded);
+    if (loaded.defaultPaperWidth) {
+      setPaperWidth(loaded.defaultPaperWidth);
+    }
   }, []);
+
+  // Compute skewers and table items for the label
+  const skewerItems = order.items.filter(isSkewerItem);
+  const tableItems = order.items.filter((item) => !isSkewerItem(item));
+  const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalTableItems = tableItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleSaveSettings = (newSettings: ReceiptSettings) => {
     setSettings(newSettings);
@@ -130,36 +148,48 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
           <div className="flex flex-wrap items-center justify-between gap-2">
             
             {/* Document Type Selector */}
-            <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs overflow-x-auto">
               <button
                 type="button"
-                onClick={() => setReceiptType('cliente')}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  receiptType === 'cliente'
-                    ? 'bg-slate-900 text-white shadow-2xs'
+                onClick={() => setReceiptType('etiqueta_mesa')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap ${
+                  receiptType === 'etiqueta_mesa'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
+                title="Etiqueta com quantidade de espetos e itens que vão para a mesa"
               >
-                Conta / Cliente
+                <span>🏷️ Etiqueta Mesa</span>
               </button>
               <button
                 type="button"
                 onClick={() => setReceiptType('cozinha')}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap ${
                   receiptType === 'cozinha'
-                    ? 'bg-orange-600 text-white shadow-2xs'
+                    ? 'bg-orange-600 text-white shadow-2xs font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Flame className="w-3 h-3 text-amber-300" />
-                <span>Cozinha / Grelha</span>
+                <span>Cozinha</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptType('cliente')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                  receiptType === 'cliente'
+                    ? 'bg-slate-900 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Conta
               </button>
               <button
                 type="button"
                 onClick={() => setReceiptType('pre_conta')}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   receiptType === 'pre_conta'
-                    ? 'bg-slate-900 text-white shadow-2xs'
+                    ? 'bg-slate-900 text-white shadow-2xs font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -321,150 +351,257 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
                 : 'w-full max-w-[440px] p-6 text-sm'
             } ${fontSize === 'grande' ? 'text-sm sm:text-base' : ''}`}
           >
-            {/* Header */}
-            <div className="text-center space-y-0.5 border-b-2 border-black pb-3">
-              <h2 className="font-black text-black text-lg uppercase tracking-wider">
-                {settings.restaurantName || 'ESPETINHO DO CHEFE'}
-              </h2>
-              {settings.subtitle && <p className="text-xs font-bold text-black">{settings.subtitle}</p>}
-              {settings.address && <p className="text-xs font-bold text-black">{settings.address}</p>}
-              {settings.phone && <p className="text-xs font-black text-black">WhatsApp/Tel: {settings.phone}</p>}
-              {settings.cnpj && <p className="text-xs font-bold text-black">CNPJ: {settings.cnpj}</p>}
-              
-              <div className="mt-1 pt-1 inline-block border-2 border-black px-2.5 py-0.5 rounded text-[11px] font-black text-black uppercase bg-slate-50">
-                {isKitchen
-                  ? '🔥 COMANDA DE COZINHA / GRELHA 🔥'
-                  : receiptType === 'pre_conta'
-                  ? '📄 PRÉ-CONTA / CONFERÊNCIA'
-                  : '*** COMPROVANTE NÃO FISCAL ***'}
-              </div>
-            </div>
-
-            {/* Order & Table info */}
-            <div className="flex justify-between font-black text-black border-b-2 border-black pb-2 text-base">
-              <span>PEDIDO #{order.orderNumber}</span>
-              <span className="uppercase">{order.tableOrCustomer}</span>
-            </div>
-
-            <div className="text-xs text-black font-bold flex justify-between">
-              <span>Data: {formattedDate}</span>
-              <span>Hora: {formattedTime}</span>
-            </div>
-
-            {order.notes && (
-              <div className="text-xs bg-amber-100 p-2 rounded border-2 border-dashed border-black text-black font-black">
-                ⚠️ OBS GERAL: {order.notes.toUpperCase()}
-              </div>
-            )}
-
-            {/* Items list */}
-            <div className="space-y-2 py-2.5 border-y-2 border-black">
-              <div className="flex justify-between font-black text-black text-xs uppercase border-b border-black pb-1">
-                <span>Qtd Descrição</span>
-                {!isKitchen && <span>Total</span>}
-              </div>
-
-              {order.items.map((item) => (
-                <div key={item.id} className="receipt-item space-y-1">
-                  <div className="flex justify-between font-black text-black">
-                    <span className={isKitchen ? 'text-base font-black' : 'text-sm font-black'}>
-                      {item.quantity}x {item.productName.toUpperCase()}
-                    </span>
-                    {!isKitchen && (
-                      <span className="font-black">R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
-                    )}
+            {receiptType === 'etiqueta_mesa' ? (
+              /* ================= ETIQUETA DE MESA VISUAL PREVIEW ================= */
+              <div className="space-y-3">
+                {/* Header */}
+                <div className="text-center space-y-0.5 border-b-2 border-black pb-2.5">
+                  <h2 className="font-black text-black text-lg uppercase tracking-wider">
+                    {settings.restaurantName || 'MARESIA'}
+                  </h2>
+                  <div className="inline-block bg-black text-white px-3 py-0.5 rounded text-[11px] font-black uppercase tracking-wider">
+                    🏷️ ETIQUETA DE MESA & ESPETOS
                   </div>
-                  {item.meatPoint && (
-                    <div className="text-xs text-black font-black bg-slate-100 p-1 border-l-4 border-black">
-                      ▸ Ponto: {item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA'}
-                    </div>
-                  )}
-                  {item.notes && (
-                    <div className="text-xs text-black font-bold border border-dashed border-black bg-amber-50 p-1">
-                      ⚠️ Obs: {item.notes.toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Financial Totals (Only if not kitchen ticket) */}
-            {!isKitchen && (
-              <div className="space-y-1 text-[11px] pt-1">
-                <div className="flex justify-between text-slate-600">
-                  <span>Subtotal Itens:</span>
-                  <span>R$ {order.subtotal.toFixed(2).replace('.', ',')}</span>
                 </div>
 
-                {order.serviceFee > 0 && (
-                  <div className="flex justify-between text-slate-600">
-                    <span>Taxa de Serviço:</span>
-                    <span>R$ {order.serviceFee.toFixed(2).replace('.', ',')}</span>
+                {/* Big Table / Comanda Box */}
+                <div className="border-3 border-black p-3 text-center bg-white rounded-lg space-y-1">
+                  <div className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                    MESA / IDENTIFICAÇÃO
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-black uppercase tracking-tight">
+                    📍 {order.tableOrCustomer}
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-black border-t border-dashed border-black pt-1.5 mt-1">
+                    <span>PEDIDO #{order.orderNumber}</span>
+                    <span>{formattedTime} • {formattedDate}</span>
+                  </div>
+                </div>
+
+                {/* Giant Skewers Callout Box */}
+                <div className="bg-black text-white p-3 rounded-xl text-center space-y-0.5 shadow-md">
+                  <div className="text-[11px] font-bold text-amber-400 tracking-widest uppercase">
+                    TOTAL DE ESPETOS NA BRASA
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-white">
+                    🍢 {totalSkewers} {totalSkewers === 1 ? 'ESPETO' : 'ESPETOS'}
+                  </div>
+                </div>
+
+                {/* Skewers List */}
+                <div className="space-y-1.5 border-b-2 border-black pb-3">
+                  <div className="text-xs font-black uppercase text-black border-b border-black pb-1 flex justify-between items-center">
+                    <span>🍢 Espetos na Brasa</span>
+                    <span className="text-slate-800 font-black">{totalSkewers} un.</span>
+                  </div>
+                  {skewerItems.length > 0 ? (
+                    skewerItems.map((item) => (
+                      <div key={item.id} className="p-2 bg-slate-50 border border-black rounded-lg space-y-1">
+                        <div className="flex justify-between items-center font-black text-black text-sm">
+                          <span>[ ] {item.quantity}x {item.productName.toUpperCase()}</span>
+                        </div>
+                        {item.meatPoint && (
+                          <div className="inline-block bg-black text-white text-[10px] font-black px-2 py-0.5 rounded">
+                            ▸ Ponto: {item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA'}
+                          </div>
+                        )}
+                        {item.notes && (
+                          <div className="text-[11px] font-black text-amber-950 bg-amber-100 p-1 rounded border border-amber-300">
+                            ⚠️ Obs: {item.notes.toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs italic text-slate-500 py-1">(Nenhum espeto neste pedido)</p>
+                  )}
+                </div>
+
+                {/* Table Items List */}
+                <div className="space-y-1.5 border-b-2 border-black pb-3">
+                  <div className="text-xs font-black uppercase text-black border-b border-black pb-1 flex justify-between items-center">
+                    <span>🍽️ O que vai na Mesa (Acompanhamentos / Bebidas / Porções)</span>
+                    <span className="text-slate-800 font-black">{totalTableItems} un.</span>
+                  </div>
+                  {tableItems.length > 0 ? (
+                    tableItems.map((item) => (
+                      <div key={item.id} className="p-2 bg-slate-50 border border-slate-300 rounded-lg space-y-1">
+                        <div className="flex justify-between items-center font-black text-black text-sm">
+                          <span>[ ] {item.quantity}x {item.productName.toUpperCase()}</span>
+                        </div>
+                        {item.notes && (
+                          <div className="text-[11px] font-black text-amber-950 bg-amber-100 p-1 rounded border border-amber-300">
+                            ⚠️ Obs: {item.notes.toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs italic text-slate-500 py-1">(Apenas espetos neste pedido)</p>
+                  )}
+                </div>
+
+                {/* Order Notes */}
+                {order.notes && (
+                  <div className="text-xs bg-amber-100 p-2 rounded-lg border-2 border-dashed border-black text-black font-black">
+                    ⚠️ OBS GERAL DA MESA: {order.notes.toUpperCase()}
                   </div>
                 )}
 
-                {order.discount > 0 && (
-                  <div className="flex justify-between text-rose-600 font-bold">
-                    <span>Desconto Especial:</span>
-                    <span>- R$ {order.discount.toFixed(2).replace('.', ',')}</span>
+                {/* Label Footer */}
+                <div className="text-center pt-2 text-[10px] text-slate-700 font-black">
+                  ✓ Conferência Atendente & Grelha • {settings.restaurantName || 'Maresia'}
+                </div>
+              </div>
+            ) : (
+              /* ================= STANDARD RECEIPT / KITCHEN / PRE-CHECK ================= */
+              <div className="space-y-3">
+                {/* Header */}
+                <div className="text-center space-y-0.5 border-b-2 border-black pb-3">
+                  <h2 className="font-black text-black text-lg uppercase tracking-wider">
+                    {settings.restaurantName || 'ESPETINHO DO CHEFE'}
+                  </h2>
+                  {settings.subtitle && <p className="text-xs font-bold text-black">{settings.subtitle}</p>}
+                  {settings.address && <p className="text-xs font-bold text-black">{settings.address}</p>}
+                  {settings.phone && <p className="text-xs font-black text-black">WhatsApp/Tel: {settings.phone}</p>}
+                  {settings.cnpj && <p className="text-xs font-bold text-black">CNPJ: {settings.cnpj}</p>}
+                  
+                  <div className="mt-1 pt-1 inline-block border-2 border-black px-2.5 py-0.5 rounded text-[11px] font-black text-black uppercase bg-slate-50">
+                    {isKitchen
+                      ? '🔥 COMANDA DE COZINHA / GRELHA 🔥'
+                      : receiptType === 'pre_conta'
+                      ? '📄 PRÉ-CONTA / CONFERÊNCIA'
+                      : '*** COMPROVANTE NÃO FISCAL ***'}
+                  </div>
+                </div>
+
+                {/* Order & Table info */}
+                <div className="flex justify-between font-black text-black border-b-2 border-black pb-2 text-base">
+                  <span>PEDIDO #{order.orderNumber}</span>
+                  <span className="uppercase">{order.tableOrCustomer}</span>
+                </div>
+
+                <div className="text-xs text-black font-bold flex justify-between">
+                  <span>Data: {formattedDate}</span>
+                  <span>Hora: {formattedTime}</span>
+                </div>
+
+                {order.notes && (
+                  <div className="text-xs bg-amber-100 p-2 rounded border-2 border-dashed border-black text-black font-black">
+                    ⚠️ OBS GERAL: {order.notes.toUpperCase()}
                   </div>
                 )}
 
-                <div className="flex justify-between font-black text-slate-900 text-sm pt-2 border-t border-slate-400">
-                  <span>TOTAL A PAGAR:</span>
-                  <span>R$ {order.total.toFixed(2).replace('.', ',')}</span>
-                </div>
+                {/* Items list */}
+                <div className="space-y-2 py-2.5 border-y-2 border-black">
+                  <div className="flex justify-between font-black text-black text-xs uppercase border-b border-black pb-1">
+                    <span>Qtd Descrição</span>
+                    {!isKitchen && <span>Total</span>}
+                  </div>
 
-                {order.payments && order.payments.length > 1 ? (
-                  <div className="pt-1.5 border-t border-dotted border-slate-300 space-y-1">
-                    <div className="flex justify-between text-[10px] text-slate-800 font-extrabold">
-                      <span>FORMAS DE PAGAMENTO:</span>
-                      <span className="text-emerald-800">MÚLTIPLAS ({order.payments.length})</span>
-                    </div>
-                    {order.payments.map((p, pIdx) => (
-                      <div key={pIdx} className="flex justify-between text-[10px] text-slate-600 pl-2">
-                        <span>• {p.method === 'dinheiro' ? 'Dinheiro' : p.method === 'pix' ? 'Pix' : p.method === 'credito' ? 'Cartão Crédito' : 'Cartão Débito'}:</span>
-                        <span className="font-mono font-bold">
-                          R$ {p.amount.toFixed(2).replace('.', ',')}
-                          {p.method === 'dinheiro' && p.change && p.change > 0 ? ` (Troco: R$ ${p.change.toFixed(2).replace('.', ',')})` : ''}
+                  {order.items.map((item) => (
+                    <div key={item.id} className="receipt-item space-y-1">
+                      <div className="flex justify-between font-black text-black">
+                        <span className={isKitchen ? 'text-base font-black' : 'text-sm font-black'}>
+                          {item.quantity}x {item.productName.toUpperCase()}
                         </span>
+                        {!isKitchen && (
+                          <span className="font-black">R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                        )}
                       </div>
-                    ))}
-                    {order.change && order.change > 0 && (
-                      <div className="flex justify-between text-[10px] font-bold text-rose-700 pl-2 pt-0.5">
-                        <span>Troco Devolvido:</span>
-                        <span>R$ {order.change.toFixed(2).replace('.', ',')}</span>
+                      {item.meatPoint && (
+                        <div className="text-xs text-black font-black bg-slate-100 p-1 border-l-4 border-black">
+                          ▸ Ponto: {item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA'}
+                        </div>
+                      )}
+                      {item.notes && (
+                        <div className="text-xs text-black font-bold border border-dashed border-black bg-amber-50 p-1">
+                          ⚠️ Obs: {item.notes.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Financial Totals (Only if not kitchen ticket) */}
+                {!isKitchen && (
+                  <div className="space-y-1 text-[11px] pt-1">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Subtotal Itens:</span>
+                      <span>R$ {order.subtotal.toFixed(2).replace('.', ',')}</span>
+                    </div>
+
+                    {order.serviceFee > 0 && (
+                      <div className="flex justify-between text-slate-600">
+                        <span>Taxa de Serviço:</span>
+                        <span>R$ {order.serviceFee.toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
-                  </div>
-                ) : (
-                  <div className="flex justify-between text-[10px] text-slate-700 pt-1 border-t border-dotted border-slate-300">
-                    <span>Forma de Pagamento:</span>
-                    <span className="font-extrabold uppercase">{order.paymentMethod || 'Não Definido'}</span>
+
+                    {order.discount > 0 && (
+                      <div className="flex justify-between text-rose-600 font-bold">
+                        <span>Desconto Especial:</span>
+                        <span>- R$ {order.discount.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between font-black text-slate-900 text-sm pt-2 border-t border-slate-400">
+                      <span>TOTAL A PAGAR:</span>
+                      <span>R$ {order.total.toFixed(2).replace('.', ',')}</span>
+                    </div>
+
+                    {order.payments && order.payments.length > 1 ? (
+                      <div className="pt-1.5 border-t border-dotted border-slate-300 space-y-1">
+                        <div className="flex justify-between text-[10px] text-slate-800 font-extrabold">
+                          <span>FORMAS DE PAGAMENTO:</span>
+                          <span className="text-emerald-800">MÚLTIPLAS ({order.payments.length})</span>
+                        </div>
+                        {order.payments.map((p, pIdx) => (
+                          <div key={pIdx} className="flex justify-between text-[10px] text-slate-600 pl-2">
+                            <span>• {p.method === 'dinheiro' ? 'Dinheiro' : p.method === 'pix' ? 'Pix' : p.method === 'credito' ? 'Cartão Crédito' : 'Cartão Débito'}:</span>
+                            <span className="font-mono font-bold">
+                              R$ {p.amount.toFixed(2).replace('.', ',')}
+                              {p.method === 'dinheiro' && p.change && p.change > 0 ? ` (Troco: R$ ${p.change.toFixed(2).replace('.', ',')})` : ''}
+                            </span>
+                          </div>
+                        ))}
+                        {order.change && order.change > 0 && (
+                          <div className="flex justify-between text-[10px] font-bold text-rose-700 pl-2 pt-0.5">
+                            <span>Troco Devolvido:</span>
+                            <span>R$ {order.change.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex justify-between text-[10px] text-slate-700 pt-1 border-t border-dotted border-slate-300">
+                        <span>Forma de Pagamento:</span>
+                        <span className="font-extrabold uppercase">{order.paymentMethod || 'Não Definido'}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-[10px] text-slate-700">
+                      <span>Status do Pagamento:</span>
+                      <span className="font-extrabold text-emerald-800 uppercase">
+                        {order.isPaid ? 'PAGO / LIQUIDADO' : 'PENDENTE'}
+                      </span>
+                    </div>
                   </div>
                 )}
 
-                <div className="flex justify-between text-[10px] text-slate-700">
-                  <span>Status do Pagamento:</span>
-                  <span className="font-extrabold text-emerald-800 uppercase">
-                    {order.isPaid ? 'PAGO / LIQUIDADO' : 'PENDENTE'}
-                  </span>
+                {/* Footer */}
+                <div className="text-center pt-3 border-t border-dashed border-slate-400 text-[10px] text-slate-600 space-y-1">
+                  {isKitchen ? (
+                    <p className="font-black text-slate-900 uppercase">🔥 Agilidade no Preparo! 🔥</p>
+                  ) : (
+                    <>
+                      <p className="font-bold text-slate-900">{settings.footerMessage || 'Obrigado pela preferência!'}</p>
+                      <p>Volte Sempre ao Espetinho do Chefe 🔥</p>
+                    </>
+                  )}
+                  <p className="text-[8px] text-slate-400 pt-1">Sistema de Gestão & KDS</p>
                 </div>
               </div>
             )}
-
-            {/* Footer */}
-            <div className="text-center pt-3 border-t border-dashed border-slate-400 text-[10px] text-slate-600 space-y-1">
-              {isKitchen ? (
-                <p className="font-black text-slate-900 uppercase">🔥 Agilidade no Preparo! 🔥</p>
-              ) : (
-                <>
-                  <p className="font-bold text-slate-900">{settings.footerMessage || 'Obrigado pela preferência!'}</p>
-                  <p>Volte Sempre ao Espetinho do Chefe 🔥</p>
-                </>
-              )}
-              <p className="text-[8px] text-slate-400 pt-1">Sistema de Gestão & KDS</p>
-            </div>
 
           </div>
 

@@ -1,4 +1,4 @@
-import { Order, ReceiptSettings, ReceiptPaperWidth, ReceiptType, DEFAULT_RECEIPT_SETTINGS } from '../types';
+import { Order, OrderItem, ReceiptSettings, ReceiptPaperWidth, ReceiptType, DEFAULT_RECEIPT_SETTINGS } from '../types';
 
 const RECEIPT_SETTINGS_STORAGE_KEY = 'espetinho_receipt_settings_v1';
 
@@ -29,6 +29,29 @@ export function saveReceiptSettings(settings: ReceiptSettings): void {
 }
 
 /**
+ * Identifies if an item is a skewer (espetinho) to compute skewer metrics on table labels.
+ */
+export function isSkewerItem(item: OrderItem): boolean {
+  if (item.requiresMeatPoint || item.meatPoint) return true;
+  const name = (item.productName || '').toLowerCase();
+  return (
+    name.includes('espet') ||
+    name.includes('medalhao') ||
+    name.includes('medalhão') ||
+    name.includes('kafta') ||
+    name.includes('pão de alho') ||
+    name.includes('pao de alho') ||
+    name.includes('queijo coalho') ||
+    name.includes('tulipa') ||
+    name.includes('coração') ||
+    name.includes('coracao') ||
+    name.includes('alcatra') ||
+    name.includes('picanha') ||
+    name.includes('cupim')
+  );
+}
+
+/**
  * Generates self-contained, standalone HTML for printing across any device (mobile or desktop).
  */
 export function generateReceiptHtml(
@@ -41,8 +64,14 @@ export function generateReceiptHtml(
   const formattedDate = dateObj.toLocaleDateString('pt-BR');
   const formattedTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-  const isKitchen = type === 'cozinha';
+  const isEtiquetaMesa = type === 'etiqueta_mesa';
+  const isKitchen = type === 'cozinha' || isEtiquetaMesa;
   const isPreCheck = type === 'pre_conta';
+
+  const skewerItems = order.items.filter(isSkewerItem);
+  const tableItems = order.items.filter((item) => !isSkewerItem(item));
+  const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalTableItems = tableItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const widthStyle =
     paperWidth === '58mm'
@@ -51,13 +80,70 @@ export function generateReceiptHtml(
       ? 'width: 74mm; max-width: 78mm; font-size: 15px; margin: 0 auto;'
       : 'width: 100%; max-width: 450px; font-size: 15px; margin: 0 auto;';
 
-  const typeHeader = isKitchen
+  const typeHeader = isEtiquetaMesa
+    ? '🏷️ ETIQUETA DE MESA & ESPETOS 🏷️'
+    : isKitchen
     ? '🔥 COMANDA DE COZINHA / GRELHA 🔥'
     : isPreCheck
     ? '📄 CONFERÊNCIA DE MESA / PRÉ-CONTA'
     : '*** COMPROVANTE NÃO FISCAL ***';
 
-  const itemsHtml = order.items
+  // Format skewer items for table label
+  const skewerItemsHtml = skewerItems
+    .map((item) => {
+      const meatPointLabel = item.meatPoint
+        ? item.meatPoint === 'mal_passada'
+          ? 'MAL PASSADA'
+          : item.meatPoint === 'ao_ponto'
+          ? 'AO PONTO'
+          : 'BEM PASSADA'
+        : null;
+
+      return `
+        <div style="margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px dashed #000000;">
+          <div style="display: flex; justify-content: space-between; font-weight: 900; color: #000000; font-size: 16px;">
+            <span>[ ] ${item.quantity}x ${item.productName.toUpperCase()}</span>
+          </div>
+          ${
+            meatPointLabel
+              ? `<div style="font-weight: 900; color: #ffffff; background: #000000; display: inline-block; padding: 1px 6px; border-radius: 2px; margin-top: 2px; font-size: 12px;">
+                  ▸ PONTO: ${meatPointLabel}
+                </div>`
+              : ''
+          }
+          ${
+            item.notes
+              ? `<div style="font-weight: 900; color: #000000; padding: 2px 4px; margin-top: 2px; font-size: 12px; border: 1px solid #000000; background: #fffbe6;">
+                  ⚠️ OBS: ${item.notes.toUpperCase()}
+                </div>`
+              : ''
+          }
+        </div>
+      `;
+    })
+    .join('');
+
+  // Format table items (non-skewers: jantinha, sides, drinks) for table label
+  const tableItemsHtml = tableItems
+    .map((item) => {
+      return `
+        <div style="margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px dashed #000000;">
+          <div style="display: flex; justify-content: space-between; font-weight: 900; color: #000000; font-size: 15px;">
+            <span>[ ] ${item.quantity}x ${item.productName.toUpperCase()}</span>
+          </div>
+          ${
+            item.notes
+              ? `<div style="font-weight: 900; color: #000000; padding: 2px 4px; margin-top: 2px; font-size: 12px; border: 1px solid #000000; background: #fffbe6;">
+                  ⚠️ OBS: ${item.notes.toUpperCase()}
+                </div>`
+              : ''
+          }
+        </div>
+      `;
+    })
+    .join('');
+
+  const standardItemsHtml = order.items
     .map((item) => {
       const meatPointLabel = item.meatPoint
         ? item.meatPoint === 'mal_passada'
@@ -169,147 +255,226 @@ export function generateReceiptHtml(
 </head>
 <body>
   <div class="receipt-container">
-    <!-- Header -->
-    <div class="text-center">
-      <div class="header-title">${settings.restaurantName || 'ESPETINHO DO CHEFE'}</div>
-      ${settings.subtitle ? `<div style="font-size: 11px;">${settings.subtitle}</div>` : ''}
-      ${settings.address ? `<div style="font-size: 10px;">${settings.address}</div>` : ''}
-      ${settings.phone ? `<div style="font-size: 10px;">WhatsApp/Tel: ${settings.phone}</div>` : ''}
-      ${settings.cnpj ? `<div style="font-size: 10px;">CNPJ: ${settings.cnpj}</div>` : ''}
-      <div class="badge">${typeHeader}</div>
-    </div>
-
-    <div class="divider"></div>
-
-    <!-- Order & Table Info -->
-    <div class="flex-between bold" style="font-size: ${isKitchen ? '19px' : '17px'}; border-bottom: 2px solid #000000; padding-bottom: 4px;">
-      <span>PEDIDO #${order.orderNumber}</span>
-      <span style="text-transform: uppercase;">${order.tableOrCustomer}</span>
-    </div>
-
-    <div class="flex-between" style="font-size: 12px; font-weight: bold; margin-top: 3px;">
-      <span>Data: ${formattedDate}</span>
-      <span>Hora: ${formattedTime}</span>
-    </div>
-
     ${
-      order.notes
-        ? `<div style="font-size: 13px; font-weight: 900; margin-top: 5px; padding: 4px; border: 2px dashed #000000; background: #fffbeb;">
-            ⚠️ OBS GERAL: ${order.notes.toUpperCase()}
-          </div>`
-        : ''
-    }
-
-    <div class="divider-double"></div>
-
-    <!-- Items Header -->
-    <div class="flex-between bold" style="font-size: 12px; text-transform: uppercase; margin-bottom: 5px; border-bottom: 1px solid #000000; padding-bottom: 2px;">
-      <span>Qtd Descrição</span>
-      ${!isKitchen ? '<span>Total</span>' : ''}
-    </div>
-
-    <!-- Items List -->
-    <div style="margin: 4px 0;">
-      ${itemsHtml}
-    </div>
-
-    ${
-      !isKitchen
+      isEtiquetaMesa
         ? `
+      <!-- ================= ETIQUETA DE MESA & ESPETOS LAYOUT ================= -->
+      <div class="text-center">
+        <div class="header-title">${settings.restaurantName || 'MARESIA'}</div>
+        ${settings.subtitle ? `<div style="font-size: 11px;">${settings.subtitle}</div>` : ''}
+        <div class="badge" style="background: #000; color: #fff; font-size: 11px; padding: 3px 6px;">
+          🏷️ ETIQUETA DE MESA & ESPETOS
+        </div>
+      </div>
+
       <div class="divider"></div>
 
-      <!-- Financial Totals -->
-      <div style="font-size: 13px;">
-        <div class="flex-between" style="font-weight: bold;">
-          <span>Subtotal Itens:</span>
-          <span>R$ ${order.subtotal.toFixed(2).replace('.', ',')}</span>
+      <!-- Giant Table Box -->
+      <div style="border: 3px solid #000; padding: 6px 4px; text-align: center; margin: 4px 0; background: #fff;">
+        <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #334155;">IDENTIFICAÇÃO / MESA:</div>
+        <div style="font-size: 26px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.1;">
+          📍 ${order.tableOrCustomer}
         </div>
+        <div class="flex-between bold" style="font-size: 12px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #000;">
+          <span>PEDIDO #${order.orderNumber}</span>
+          <span>${formattedTime} (${formattedDate})</span>
+        </div>
+      </div>
 
+      <!-- Giant Skewers Count Box -->
+      <div style="background: #000; color: #fff; padding: 8px 4px; text-align: center; border-radius: 4px; margin: 8px 0;">
+        <div style="font-size: 11px; font-weight: bold; letter-spacing: 1px;">TOTAL DE ESPETOS NA BRASA</div>
+        <div style="font-size: 24px; font-weight: 900; line-height: 1.1; margin-top: 2px;">
+          🍢 ${totalSkewers} ${totalSkewers === 1 ? 'ESPETO' : 'ESPETOS'}
+        </div>
+      </div>
+
+      <!-- Skewers List -->
+      <div style="margin: 8px 0;">
+        <div style="font-size: 13px; font-weight: 900; border-bottom: 2px solid #000; padding-bottom: 3px; margin-bottom: 6px; text-transform: uppercase;">
+          🍢 ESPETOS NA BRASA (${totalSkewers} UN):
+        </div>
         ${
-          order.serviceFee > 0
-            ? `<div class="flex-between" style="font-weight: bold;">
-                <span>Taxa de Serviço:</span>
-                <span>R$ ${order.serviceFee.toFixed(2).replace('.', ',')}</span>
-              </div>`
-            : ''
+          skewerItems.length > 0
+            ? skewerItemsHtml
+            : '<div style="font-size: 12px; font-style: italic; padding: 4px 0;">(Nenhum espeto neste pedido)</div>'
         }
+      </div>
 
+      <!-- Table Items List -->
+      <div style="margin: 10px 0;">
+        <div style="font-size: 13px; font-weight: 900; border-bottom: 2px solid #000; padding-bottom: 3px; margin-bottom: 6px; text-transform: uppercase;">
+          🍽️ O QUE VAI NA MESA (${totalTableItems} ${totalTableItems === 1 ? 'ITEM' : 'ITENS'}):
+        </div>
         ${
-          order.discount > 0
-            ? `<div class="flex-between" style="font-weight: 900;">
-                <span>Desconto Especial:</span>
-                <span>- R$ ${order.discount.toFixed(2).replace('.', ',')}</span>
-              </div>`
-            : ''
+          tableItems.length > 0
+            ? tableItemsHtml
+            : '<div style="font-size: 12px; font-style: italic; padding: 4px 0;">(Apenas espetos neste pedido)</div>'
         }
+      </div>
 
+      ${
+        order.notes
+          ? `<div style="border: 2px dashed #000; padding: 6px; font-size: 13px; font-weight: 900; margin: 8px 0; background: #fffbe6;">
+              ⚠️ OBS DA MESA: ${order.notes.toUpperCase()}
+            </div>`
+          : ''
+      }
+
+      <div class="divider-double"></div>
+
+      <div class="text-center" style="font-size: 11px; font-weight: 900; margin-top: 4px;">
+        ✓ CONFERÊNCIA ATENDENTE & GRELHA • ${settings.restaurantName || 'MARESIA'}
+      </div>
+      <div class="text-center" style="font-size: 8px; color: #64748b; margin-top: 2px;">
+        Sistema de Gestão & KDS
+      </div>
+    `
+        : `
+      <!-- ================= STANDARD RECEIPT / KITCHEN LAYOUT ================= -->
+      <!-- Header -->
+      <div class="text-center">
+        <div class="header-title">${settings.restaurantName || 'ESPETINHO DO CHEFE'}</div>
+        ${settings.subtitle ? `<div style="font-size: 11px;">${settings.subtitle}</div>` : ''}
+        ${settings.address ? `<div style="font-size: 10px;">${settings.address}</div>` : ''}
+        ${settings.phone ? `<div style="font-size: 10px;">WhatsApp/Tel: ${settings.phone}</div>` : ''}
+        ${settings.cnpj ? `<div style="font-size: 10px;">CNPJ: ${settings.cnpj}</div>` : ''}
+        <div class="badge">${typeHeader}</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Order & Table Info -->
+      <div class="flex-between bold" style="font-size: ${isKitchen ? '19px' : '17px'}; border-bottom: 2px solid #000000; padding-bottom: 4px;">
+        <span>PEDIDO #${order.orderNumber}</span>
+        <span style="text-transform: uppercase;">${order.tableOrCustomer}</span>
+      </div>
+
+      <div class="flex-between" style="font-size: 12px; font-weight: bold; margin-top: 3px;">
+        <span>Data: ${formattedDate}</span>
+        <span>Hora: ${formattedTime}</span>
+      </div>
+
+      ${
+        order.notes
+          ? `<div style="font-size: 13px; font-weight: 900; margin-top: 5px; padding: 4px; border: 2px dashed #000000; background: #fffbeb;">
+              ⚠️ OBS GERAL: ${order.notes.toUpperCase()}
+            </div>`
+          : ''
+      }
+
+      <div class="divider-double"></div>
+
+      <!-- Items Header -->
+      <div class="flex-between bold" style="font-size: 12px; text-transform: uppercase; margin-bottom: 5px; border-bottom: 1px solid #000000; padding-bottom: 2px;">
+        <span>Qtd Descrição</span>
+        ${!isKitchen ? '<span>Total</span>' : ''}
+      </div>
+
+      <!-- Items List -->
+      <div style="margin: 4px 0;">
+        ${standardItemsHtml}
+      </div>
+
+      ${
+        !isKitchen
+          ? `
         <div class="divider"></div>
 
-        <div class="flex-between bolder" style="font-size: 18px; margin: 5px 0;">
-          <span>TOTAL A PAGAR:</span>
-          <span>R$ ${order.total.toFixed(2).replace('.', ',')}</span>
-        </div>
+        <!-- Financial Totals -->
+        <div style="font-size: 13px;">
+          <div class="flex-between" style="font-weight: bold;">
+            <span>Subtotal Itens:</span>
+            <span>R$ ${order.subtotal.toFixed(2).replace('.', ',')}</span>
+          </div>
 
-        ${
-          order.payments && order.payments.length > 1
-            ? `
-          <div style="font-size: 12px; margin-top: 4px; border: 1px solid #000; padding: 4px; border-radius: 2px;">
-            <div class="flex-between bold" style="font-size: 13px;">
-              <span>FORMAS DE PAGAMENTO:</span>
-              <span>MÚLTIPLAS (${order.payments.length})</span>
+          ${
+            order.serviceFee > 0
+              ? `<div class="flex-between" style="font-weight: bold;">
+                  <span>Taxa de Serviço:</span>
+                  <span>R$ ${order.serviceFee.toFixed(2).replace('.', ',')}</span>
+                </div>`
+              : ''
+          }
+
+          ${
+            order.discount > 0
+              ? `<div class="flex-between" style="font-weight: 900;">
+                  <span>Desconto Especial:</span>
+                  <span>- R$ ${order.discount.toFixed(2).replace('.', ',')}</span>
+                </div>`
+              : ''
+          }
+
+          <div class="divider"></div>
+
+          <div class="flex-between bolder" style="font-size: 18px; margin: 5px 0;">
+            <span>TOTAL A PAGAR:</span>
+            <span>R$ ${order.total.toFixed(2).replace('.', ',')}</span>
+          </div>
+
+          ${
+            order.payments && order.payments.length > 1
+              ? `
+            <div style="font-size: 12px; margin-top: 4px; border: 1px solid #000; padding: 4px; border-radius: 2px;">
+              <div class="flex-between bold" style="font-size: 13px;">
+                <span>FORMAS DE PAGAMENTO:</span>
+                <span>MÚLTIPLAS (${order.payments.length})</span>
+              </div>
+              ${order.payments
+                .map(
+                  (p) => `
+                <div class="flex-between" style="font-size: 12px; padding-left: 6px; font-weight: bold;">
+                  <span>• ${(p.method === 'dinheiro' ? 'Dinheiro' : p.method === 'pix' ? 'Pix' : p.method === 'credito' ? 'Crédito' : 'Débito').toUpperCase()}:</span>
+                  <span class="bold">R$ ${p.amount.toFixed(2).replace('.', ',')}${p.method === 'dinheiro' && p.change && p.change > 0 ? ` (Troco R$ ${p.change.toFixed(2).replace('.', ',')})` : ''}</span>
+                </div>
+              `
+                )
+                .join('')}
+              ${
+                order.change && order.change > 0
+                  ? `
+                <div class="flex-between bold" style="font-size: 12px; padding-left: 6px; margin-top: 2px; color: #000;">
+                  <span>Troco Total Devolvido:</span>
+                  <span>R$ ${order.change.toFixed(2).replace('.', ',')}</span>
+                </div>
+              `
+                  : ''
+              }
             </div>
-            ${order.payments
-              .map(
-                (p) => `
-              <div class="flex-between" style="font-size: 12px; padding-left: 6px; font-weight: bold;">
-                <span>• ${(p.method === 'dinheiro' ? 'Dinheiro' : p.method === 'pix' ? 'Pix' : p.method === 'credito' ? 'Crédito' : 'Débito').toUpperCase()}:</span>
-                <span class="bold">R$ ${p.amount.toFixed(2).replace('.', ',')}${p.method === 'dinheiro' && p.change && p.change > 0 ? ` (Troco R$ ${p.change.toFixed(2).replace('.', ',')})` : ''}</span>
-              </div>
-            `
-              )
-              .join('')}
-            ${
-              order.change && order.change > 0
-                ? `
-              <div class="flex-between bold" style="font-size: 12px; padding-left: 6px; margin-top: 2px; color: #000;">
-                <span>Troco Total Devolvido:</span>
-                <span>R$ ${order.change.toFixed(2).replace('.', ',')}</span>
-              </div>
-            `
-                : ''
-            }
-          </div>
-        `
-            : `
-          <div class="flex-between bold" style="font-size: 13px; margin-top: 4px;">
-            <span>Forma de Pagamento:</span>
-            <span class="bold" style="text-transform: uppercase;">${order.paymentMethod || 'Não Definido'}</span>
-          </div>
-        `
-        }
+          `
+              : `
+            <div class="flex-between bold" style="font-size: 13px; margin-top: 4px;">
+              <span>Forma de Pagamento:</span>
+              <span class="bold" style="text-transform: uppercase;">${order.paymentMethod || 'Não Definido'}</span>
+            </div>
+          `
+          }
 
-        <div class="flex-between bold" style="font-size: 13px; margin-top: 2px;">
-          <span>Status do Pagamento:</span>
-          <span class="bold">${order.isPaid ? 'PAGO / LIQUIDADO' : 'PENDENTE'}</span>
+          <div class="flex-between bold" style="font-size: 13px; margin-top: 2px;">
+            <span>Status do Pagamento:</span>
+            <span class="bold">${order.isPaid ? 'PAGO / LIQUIDADO' : 'PENDENTE'}</span>
+          </div>
+        </div>
+      `
+          : ''
+      }
+
+      <div class="divider-double"></div>
+
+      <!-- Footer -->
+      <div class="text-center" style="font-size: 10px; margin-top: 6px;">
+        ${
+          isKitchen
+            ? '<div class="bolder" style="font-size: 12px;">🔥 AGILIDADE NA BRASA! 🔥</div>'
+            : `<div>${settings.footerMessage || 'Obrigado pela preferência! Volte sempre 🔥'}</div>`
+        }
+        <div style="font-size: 8px; color: #64748b; margin-top: 4px;">
+          Sistema de Gestão & KDS Espetinho do Chefe
         </div>
       </div>
     `
-        : ''
     }
-
-    <div class="divider-double"></div>
-
-    <!-- Footer -->
-    <div class="text-center" style="font-size: 10px; margin-top: 6px;">
-      ${
-        isKitchen
-          ? '<div class="bolder" style="font-size: 12px;">🔥 AGILIDADE NA BRASA! 🔥</div>'
-          : `<div>${settings.footerMessage || 'Obrigado pela preferência! Volte sempre 🔥'}</div>`
-      }
-      <div style="font-size: 8px; color: #64748b; margin-top: 4px;">
-        Sistema de Gestão & KDS Espetinho do Chefe
-      </div>
-    </div>
   </div>
 
   <script>
@@ -433,7 +598,54 @@ export function formatReceiptWhatsAppText(
   const formattedDate = dateObj.toLocaleDateString('pt-BR');
   const formattedTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-  const isKitchen = type === 'cozinha';
+  const isEtiquetaMesa = type === 'etiqueta_mesa';
+  const isKitchen = type === 'cozinha' || isEtiquetaMesa;
+
+  if (isEtiquetaMesa) {
+    const skewerItems = order.items.filter(isSkewerItem);
+    const tableItems = order.items.filter((item) => !isSkewerItem(item));
+    const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    let text = `🔥 *${settings.restaurantName || 'ESPETINHO DO CHEFE'}* 🔥\n`;
+    text += `🏷️ *ETIQUETA DE MESA & ESPETOS*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `📍 *MESA/CLIENTE: ${order.tableOrCustomer.toUpperCase()}*\n`;
+    text += `📋 Pedido #${order.orderNumber} • ${formattedDate} às ${formattedTime}\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `🍢 *TOTAL DE ESPETOS: ${totalSkewers} ${totalSkewers === 1 ? 'ESPETO' : 'ESPETOS'}*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `*🍢 ESPETOS NA BRASA:*\n`;
+    if (skewerItems.length > 0) {
+      skewerItems.forEach((i) => {
+        text += `[ ] *${i.quantity}x* ${i.productName}\n`;
+        if (i.meatPoint) {
+          const pt = i.meatPoint === 'mal_passada' ? 'MAL PASSADA' : i.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA';
+          text += `    ↳ Ponto: *${pt}*\n`;
+        }
+        if (i.notes) text += `    ↳ Obs: ${i.notes}\n`;
+      });
+    } else {
+      text += `_(Nenhum espeto neste pedido)_\n`;
+    }
+
+    text += `\n*🍽️ O QUE VAI NA MESA:*\n`;
+    if (tableItems.length > 0) {
+      tableItems.forEach((i) => {
+        text += `[ ] *${i.quantity}x* ${i.productName}\n`;
+        if (i.notes) text += `    ↳ Obs: ${i.notes}\n`;
+      });
+    } else {
+      text += `_(Apenas espetos neste pedido)_\n`;
+    }
+
+    if (order.notes) {
+      text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      text += `⚠️ *OBS DA MESA:* ${order.notes}\n`;
+    }
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `✓ Agilidade no atendimento e na brasa! 🔥\n`;
+    return text;
+  }
 
   let text = `🔥 *${settings.restaurantName || 'ESPETINHO DO CHEFE'}* 🔥\n`;
   if (settings.subtitle) text += `_${settings.subtitle}_\n`;
@@ -526,7 +738,63 @@ export function formatReceiptRawText(
   const formattedDate = dateObj.toLocaleDateString('pt-BR');
   const formattedTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-  const isKitchen = type === 'cozinha';
+  const isEtiquetaMesa = type === 'etiqueta_mesa';
+  const isKitchen = type === 'cozinha' || isEtiquetaMesa;
+
+  if (isEtiquetaMesa) {
+    const skewerItems = order.items.filter(isSkewerItem);
+    const tableItems = order.items.filter((item) => !isSkewerItem(item));
+    const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    const lines: string[] = [
+      padCenter(settings.restaurantName || 'MARESIA'),
+      padCenter('*** ETIQUETA MESA & ESPETOS ***'),
+      doubleSeparator,
+      padCenter(`>> ${order.tableOrCustomer.toUpperCase()} <<`),
+      padBetween(`PEDIDO #${order.orderNumber}`, `${formattedTime} (${formattedDate})`),
+      separator,
+      padCenter(`🍢 TOTAL ESPETOS: ${totalSkewers} 🍢`),
+      separator,
+      '🍢 ESPETOS NA BRASA:',
+    ];
+
+    if (skewerItems.length > 0) {
+      skewerItems.forEach((item) => {
+        lines.push(`[ ] ${item.quantity}x ${item.productName}`);
+        if (item.meatPoint) {
+          const pt = item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA';
+          lines.push(`    > PONTO: ${pt}`);
+        }
+        if (item.notes) {
+          lines.push(`    * OBS: ${item.notes}`);
+        }
+      });
+    } else {
+      lines.push('  (Nenhum espeto)');
+    }
+
+    lines.push(separator);
+    lines.push(`🍽️ O QUE VAI NA MESA (${tableItems.reduce((acc, i) => acc + i.quantity, 0)} ITENS):`);
+    if (tableItems.length > 0) {
+      tableItems.forEach((item) => {
+        lines.push(`[ ] ${item.quantity}x ${item.productName}`);
+        if (item.notes) {
+          lines.push(`    * OBS: ${item.notes}`);
+        }
+      });
+    } else {
+      lines.push('  (Apenas espetos)');
+    }
+
+    if (order.notes) {
+      lines.push(separator);
+      lines.push(`OBS GERAL: ${order.notes}`);
+    }
+
+    lines.push(doubleSeparator);
+    lines.push(padCenter('AGILIDADE NA GRELHA & ATENDIMENTO'));
+    return lines.join('\n');
+  }
 
   const lines: string[] = [
     padCenter(settings.restaurantName || 'ESPETINHO DO CHEFE'),

@@ -1549,6 +1549,174 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* SUB-TAB 4: DADOS DA EMPRESA & CONFIGURAÇÕES DE COMANDA / ETIQUETA */}
+      {/* ========================================================================= */}
+      {subTab === 'empresa' && (
+        <div className="space-y-6">
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+            <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                <Store className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900">
+                  Dados do Estabelecimento & Impressão
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Informações impressas nos comprovantes, comandas de mesa e etiquetas térmicas.
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveReceiptSettings(empresaSettings);
+                showToast('✅ Dados da empresa e comanda salvos com sucesso!');
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Nome do Estabelecimento *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={empresaSettings.restaurantName}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, restaurantName: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 font-bold"
+                    placeholder="Ex: MARESIA"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Slogan / Subtítulo
+                  </label>
+                  <input
+                    type="text"
+                    value={empresaSettings.subtitle || ''}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, subtitle: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: Espetinhos, Bebidas & Porções"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    WhatsApp / Telefone de Contato
+                  </label>
+                  <input
+                    type="text"
+                    value={empresaSettings.phone || ''}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, phone: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: (67) 99125-6083"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    CNPJ ou CPF
+                  </label>
+                  <input
+                    type="text"
+                    value={empresaSettings.cnpj || ''}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, cnpj: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: 12.345.678/0001-90"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Endereço Completo / Horário de Funcionamento
+                  </label>
+                  <input
+                    type="text"
+                    value={empresaSettings.address || ''}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, address: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: Av. Principal, 123 - Centro • 18:00 às 23:30"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Chave PIX do Estabelecimento
+                  </label>
+                  <input
+                    type="text"
+                    value={empresaSettings.pixKey || ''}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, pixKey: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: (67) 99125-6083 ou pix@maresia.com.br"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Largura Padrão da Bobina Térmica
+                  </label>
+                  <select
+                    value={empresaSettings.defaultPaperWidth || '80mm'}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, defaultPaperWidth: e.target.value as ReceiptPaperWidth })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 font-bold"
+                  >
+                    <option value="80mm">80mm (Bobina padrão balcão / Epson / Elgin / Bematech)</option>
+                    <option value="58mm">58mm (Mini impressora Bluetooth portátil)</option>
+                    <option value="a4">A4 (Impressora padrão / Folha inteira)</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Mensagem de Rodapé da Comanda
+                  </label>
+                  <input
+                    type="text"
+                    value={empresaSettings.footerMessage || ''}
+                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, footerMessage: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: Obrigado pela preferência! Volte sempre 🔥"
+                  />
+                </div>
+
+                <div className="md:col-span-2 bg-amber-50 p-3.5 rounded-xl border border-amber-200">
+                  <label className="flex items-center space-x-2.5 cursor-pointer font-bold text-xs text-amber-950">
+                    <input
+                      type="checkbox"
+                      checked={empresaSettings.autoPrintOnOrderCreate ?? true}
+                      onChange={(e) => setEmpresaSettings({ ...empresaSettings, autoPrintOnOrderCreate: e.target.checked })}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 border-amber-300"
+                    />
+                    <span>
+                      🍢 Imprimir / exibir automaticamente etiqueta da mesa com espetos ao confirmar pedido
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-amber-800 ml-6 mt-1">
+                    Ao confirmar um novo pedido pelo atendente, a etiqueta de mesa com contagem dos espetos e itens da mesa é gerada instantaneamente.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center space-x-2 cursor-pointer active:scale-95"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Salvar Dados da Empresa</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: READ-ONLY VIEW USER DETAILS (OPÇÃO DE VISUALIZAR SEM EDITAR) */}
       {/* ========================================================================= */}
       {viewingUser && (

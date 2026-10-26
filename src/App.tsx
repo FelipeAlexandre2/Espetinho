@@ -3,7 +3,7 @@ import {
   TabType, Product, StockItem, Order, CashShift, OrderStatus, MeatPoint, PaymentMethod, PaymentSplit, OrderItem, AppUser,
   SystemLog, LogCategory, LogActionType, hasPermission, getTabRequiredPermission, getTabTitle, getDefaultTabForUser,
   SystemModule, MarmitaOrder, MarmitaOrderStatus, MarmitaSizeConfig, MarmitaOption, MarmitaSettings,
-  canUserManagePhotos
+  canUserManagePhotos, ReceiptType
 } from './types';
 import { 
   loadProducts, saveProducts, 
@@ -30,7 +30,6 @@ import { LoginScreen } from './components/LoginScreen';
 import { Navbar } from './components/Navbar';
 import { CardapioTab } from './components/CardapioTab';
 import { PedidosEstoqueTab } from './components/PedidosEstoqueTab';
-import { ChurrasqueiraTab } from './components/ChurrasqueiraTab';
 import { CaixaTab } from './components/CaixaTab';
 import { RelatoriosTab } from './components/RelatoriosTab';
 import { UsuariosTab } from './components/UsuariosTab';
@@ -41,6 +40,7 @@ import { StartupScreen } from './components/StartupScreen';
 import { ReceiptModal } from './components/ReceiptModal';
 import { AccessDeniedView } from './components/AccessDeniedView';
 import { CustomerMenu } from './components/CustomerMenu';
+import { LogoModal } from './components/LogoModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('caixa');
@@ -77,14 +77,33 @@ export default function App() {
   const [marmitaOptions, setMarmitaOptions] = useState<MarmitaOption[]>(() => loadMarmitaOptions());
   const [marmitariaSettings, setMarmitariaSettings] = useState<MarmitaSettings>(() => loadMarmitaSettings());
 
-  // Logo oficial fixa do Maresia (carregada diretamente do repositório GitHub)
-  const logo = loadMaresiaLogo();
+  // Logo e Capa oficial do Maresia (carregada do GitHub ou personalizada)
+  const [logo, setLogo] = useState<string>(() => loadMaresiaLogo());
+  const [isLogoModalOpen, setIsLogoModalOpen] = useState<boolean>(false);
+
+  const handleSaveLogo = (newLogo: string) => {
+    saveMaresiaLogo(newLogo);
+    setLogo(newLogo);
+    addAuditLog(
+      'sistema',
+      'sistema_config_alterada',
+      'Foto de Capa/Logo Atualizada',
+      'A foto de capa/logo do sistema foi atualizada com sucesso.',
+      'info'
+    );
+  };
 
   // Authentication State: Require password/PIN entry on terminal start
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
-  // Receipt Modal State
+  // Receipt & Etiqueta Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+  const [receiptInitialType, setReceiptInitialType] = useState<ReceiptType>('etiqueta_mesa');
+
+  const handleOpenReceiptModal = (order: Order, type?: ReceiptType) => {
+    setReceiptInitialType(type || (order.isPaid ? 'cliente' : 'etiqueta_mesa'));
+    setReceiptOrder(order);
+  };
 
   // Initial fetch from PostgreSQL backend API
   useEffect(() => {
@@ -875,10 +894,9 @@ export default function App() {
       );
     });
 
-    // Automatically pop receipt preview modal ONLY if order is paid at cashier front
-    if (newOrder.isPaid) {
-      setReceiptOrder(newOrder);
-    }
+    // Ao confirmar o pedido (atendente ou garçom), abre a etiqueta de mesa com quantidade de espetos e itens da mesa
+    setReceiptInitialType('etiqueta_mesa');
+    setReceiptOrder(newOrder);
 
     const payLabel = newOrder.payments && newOrder.payments.length > 1
       ? `Múltiplas Formas (${newOrder.payments.map((p) => `${p.method.toUpperCase()} R$ ${p.amount.toFixed(2).replace('.', ',')}`).join(' + ')})`
@@ -1036,6 +1054,7 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
 
+    setReceiptInitialType('cliente');
     setReceiptOrder(consolidatedOrder);
 
     const payDesc = payments && payments.length > 1
@@ -1201,18 +1220,32 @@ export default function App() {
     );
   }
 
+  // Check if current user is an Administrator or permitted to manage branding photos
+  const isAdminUser = currentUser?.role === 'admin' || canUserManagePhotos(currentUser);
+
   // Render dedicated Startup Screen when system starts or requested by operator
   // If permitted, displays BOTH modules. If not permitted, displays ONLY 1 module!
   if (showStartupScreen) {
     return (
-      <StartupScreen
-        currentUser={currentUser}
-        activeOrdersCount={activeOrdersCount}
-        marmitaOrdersCount={activeMarmitasCount}
-        onSelectSystem={handleStartupSelectSystem}
-        onLogout={handleLogout}
-        logo={logo}
-      />
+      <>
+        <StartupScreen
+          currentUser={currentUser}
+          activeOrdersCount={activeOrdersCount}
+          marmitaOrdersCount={activeMarmitasCount}
+          onSelectSystem={handleStartupSelectSystem}
+          onLogout={handleLogout}
+          logo={logo}
+          onOpenLogoModal={isAdminUser ? () => setIsLogoModalOpen(true) : undefined}
+        />
+        {isAdminUser && (
+          <LogoModal
+            isOpen={isLogoModalOpen}
+            onClose={() => setIsLogoModalOpen(false)}
+            currentLogo={logo}
+            onSaveLogo={handleSaveLogo}
+          />
+        )}
+      </>
     );
   }
 
@@ -1236,6 +1269,7 @@ export default function App() {
         marmitaOrdersCount={activeMarmitasCount}
         onOpenModuleSelectModal={() => setShowStartupScreen(true)}
         logo={logo}
+        onOpenLogoModal={isAdminUser ? () => setIsLogoModalOpen(true) : undefined}
       />
 
       {/* Main Container */}
@@ -1303,7 +1337,7 @@ export default function App() {
                   onCloseShift={handleCloseShift}
                   onCreateOrder={handleCreateOrder}
                   onPayTableOrders={handlePayTableOrders}
-                  onPrintReceipt={(ord) => setReceiptOrder(ord)}
+                  onPrintReceipt={(ord) => handleOpenReceiptModal(ord)}
                 />
               )}
 
@@ -1317,23 +1351,13 @@ export default function App() {
                   currentUser={currentUser}
                   onCreateOrder={handleCreateOrder}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
-                  onPrintReceipt={(ord) => setReceiptOrder(ord)}
+                  onPrintReceipt={(ord) => handleOpenReceiptModal(ord)}
                   onRestockItem={handleRestockItem}
                   onDeductStockItem={handleDeductStockItem}
                   onAddStockItem={handleAddStockItem}
                   onUpdateStockItem={handleUpdateStockItem}
                   onDeleteStockItem={handleDeleteStockItem}
                   onSyncStockFromProducts={handleSyncStockFromProducts}
-                />
-              )}
-
-              {/* Tab 3: Churrasqueira e Cozinha (KDS) */}
-              {activeTab === 'churrasqueira' && (
-                <ChurrasqueiraTab
-                  orders={orders}
-                  products={products}
-                  onUpdateItemStatus={handleUpdateOrderItemStatus}
-                  onUpdateOrderStatus={handleUpdateOrderStatus}
                 />
               )}
 
@@ -1363,7 +1387,7 @@ export default function App() {
                   currentUser={currentUser}
                   onCreateOrder={handleCreateOrder}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
-                  onPrintReceipt={(ord) => setReceiptOrder(ord)}
+                  onPrintReceipt={(ord) => handleOpenReceiptModal(ord)}
                   onRestockItem={handleRestockItem}
                   onDeductStockItem={handleDeductStockItem}
                   onAddStockItem={handleAddStockItem}
@@ -1435,11 +1459,22 @@ export default function App() {
         espetoOrdersCount={activeOrdersCount}
       />
 
-      {/* Thermal Receipt Modal (Espetos) */}
+      {/* Thermal Receipt & Etiqueta Modal (Espetos) */}
       <ReceiptModal
         order={receiptOrder}
+        initialType={receiptInitialType}
         onClose={() => setReceiptOrder(null)}
       />
+
+      {/* Logo & Capa Modal (Exclusivo Administrador) */}
+      {isAdminUser && (
+        <LogoModal
+          isOpen={isLogoModalOpen}
+          onClose={() => setIsLogoModalOpen(false)}
+          currentLogo={logo}
+          onSaveLogo={handleSaveLogo}
+        />
+      )}
     </div>
   );
 }

@@ -9,7 +9,9 @@ import {
   AlertCircle, ChefHat, Flame, Sparkles, Receipt,
   CheckCircle2, ArrowRight, RefreshCw, Layers
 } from 'lucide-react';
-import { printReceiptDirectly, getReceiptSettings } from '../utils/printReceipt';
+import { printReceiptDirect, getReceiptSettings } from '../utils/printReceipt';
+import { isBeverageProduct, isSkewerOrMeatProduct } from '../utils/productUtils';
+import { sendOrderToPrintQueue } from '../lib/storage';
 
 interface MesasTabProps {
   orders: Order[];
@@ -90,7 +92,7 @@ export const MesasTab: React.FC<MesasTabProps> = ({
   const totalTables = TABLE_OPTIONS.length;
   const occupiedCount = Object.keys(activeOrdersByTable).length;
   const freeCount = totalTables - occupiedCount;
-  const totalInConsumption = Object.values(activeOrdersByTable).reduce(
+  const totalInConsumption = (Object.values(activeOrdersByTable) as Order[]).reduce(
     (sum, ord) => sum + (ord.total || 0),
     0
   );
@@ -124,15 +126,21 @@ export const MesasTab: React.FC<MesasTabProps> = ({
 
   // Add a product to the pending items for the table
   const handleAddProduct = (product: Product, meatPoint?: MeatPoint, notes?: string) => {
-    if (product.requiresMeatPoint && !meatPoint) {
+    // Check whether the product is a beverage or skewer/meat
+    const isDrink = isBeverageProduct(product);
+    const isSkewer = !isDrink && isSkewerOrMeatProduct(product);
+
+    // Meat point prompt ONLY appears for skewers/meats, NEVER for beverages
+    if (isSkewer && !meatPoint) {
       setMeatPointItem({ product, meatPoint: 'ao_ponto' });
       setItemNote('');
       return;
     }
 
     setNewItems((prev) => {
+      const targetMeatPoint = isDrink ? undefined : meatPoint;
       const existingIdx = prev.findIndex(
-        (i) => i.productId === product.id && i.meatPoint === meatPoint && (i.notes || '') === (notes || '')
+        (i) => i.productId === product.id && i.meatPoint === targetMeatPoint && (i.notes || '') === (notes || '')
       );
       if (existingIdx >= 0) {
         const updated = [...prev];
@@ -148,10 +156,11 @@ export const MesasTab: React.FC<MesasTabProps> = ({
         productName: product.name,
         quantity: 1,
         price: product.price,
-        meatPoint,
+        meatPoint: targetMeatPoint,
         notes: notes || undefined,
         status: 'entregue',
-        requiresMeatPoint: product.requiresMeatPoint,
+        requiresMeatPoint: isSkewer,
+        category: product.category,
       };
       return [...prev, newItem];
     });
@@ -233,16 +242,27 @@ export const MesasTab: React.FC<MesasTabProps> = ({
       };
     }
 
-    // Direct thermal print of Kitchen/Grill Sticker
-    try {
-      const settings = getReceiptSettings();
-      printReceiptDirectly(finalOrderForPrinting, settings, 'etiqueta_mesa', settings.paperWidth || '80mm');
-    } catch (e) {
-      console.warn('Erro na impressão direta, abrindo modal:', e);
-      onPrintReceipt(finalOrderForPrinting, 'etiqueta_mesa');
+    // Detect if running on mobile device or desktop
+    const isMobileDevice = typeof window !== 'undefined' && (
+      window.innerWidth <= 768 || 
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    );
+
+    // Send to USB Printer queue on the computer
+    sendOrderToPrintQueue(finalOrderForPrinting, 'etiqueta_mesa', isMobileDevice ? 'celular' : 'terminal').catch(console.warn);
+
+    // If on computer (or non-mobile), trigger local print directly as well
+    if (!isMobileDevice) {
+      try {
+        const settings = getReceiptSettings();
+        printReceiptDirect(finalOrderForPrinting, settings, 'etiqueta_mesa', '58mm');
+      } catch (e) {
+        console.warn('Erro na impressão direta, abrindo modal:', e);
+        onPrintReceipt(finalOrderForPrinting, 'etiqueta_mesa');
+      }
     }
 
-    setSuccessBanner(`✅ Pedido lançado na ${selectedTable}! Etiqueta enviada para a Cozinha & Churrasqueira.`);
+    setSuccessBanner(`✅ Pedido lançado na ${selectedTable}! Etiqueta 58mm enviada para a impressora USB.`);
     setNewItems([]);
     
     // Auto-clear success banner after 4 seconds
@@ -545,6 +565,9 @@ export const MesasTab: React.FC<MesasTabProps> = ({
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {filteredProducts.map((product) => {
+                        const isDrink = isBeverageProduct(product);
+                        const isSkewer = !isDrink && isSkewerOrMeatProduct(product);
+
                         return (
                           <div
                             key={product.id}
@@ -559,7 +582,7 @@ export const MesasTab: React.FC<MesasTabProps> = ({
                                 />
                               ) : (
                                 <div className="w-12 h-12 rounded-xl bg-slate-200 flex items-center justify-center shrink-0 text-slate-400 text-lg">
-                                  🍢
+                                  {isDrink ? '🥤' : isSkewer ? '🍢' : '🍽️'}
                                 </div>
                               )}
                               <div className="min-w-0">
@@ -569,9 +592,14 @@ export const MesasTab: React.FC<MesasTabProps> = ({
                                 <span className="text-xs font-black text-emerald-600 block">
                                   R$ {product.price.toFixed(2).replace('.', ',')}
                                 </span>
-                                {product.requiresMeatPoint && (
+                                {isSkewer && (
                                   <span className="text-[10px] font-extrabold text-orange-600 block">
-                                    🥩 Exige Ponto da Carne
+                                    🥩 Escolher Ponto da Carne
+                                  </span>
+                                )}
+                                {isDrink && (
+                                  <span className="text-[10px] font-semibold text-blue-600 block">
+                                    🥤 Bebida
                                   </span>
                                 )}
                               </div>
@@ -580,7 +608,7 @@ export const MesasTab: React.FC<MesasTabProps> = ({
                             <button
                               onClick={() => handleAddProduct(product)}
                               className="w-9 h-9 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-sm transition active:scale-95 cursor-pointer font-black"
-                              title="Adicionar à mesa"
+                              title={isSkewer ? "Escolher ponto da carne e adicionar à mesa" : "Adicionar diretamente à mesa"}
                             >
                               <Plus className="w-4 h-4 stroke-[3]" />
                             </button>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Product, Category, Order, MeatPoint, TABLES, AppUser, hasPermission, canUserCreateOrder } from '../types';
 import { Plus, Minus, Search, Edit2, Trash2, Check, X, Flame, Package, Zap, Tag, DollarSign, Image as ImageIcon, Utensils, CheckCircle2, Lock, QrCode } from 'lucide-react';
 import { QrCodeModal } from './QrCodeModal';
+import { isBeverageProduct, isSkewerOrMeatProduct } from '../utils/productUtils';
 
 interface CardapioTabProps {
   products: Product[];
@@ -83,7 +84,7 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
       costPrice: 6.00,
       description: '',
       photoUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80',
-      requiresMeatPoint: true,
+      requiresMeatPoint: false,
       isAvailable: true,
       isQuickPos: true,
       stockQty: 30,
@@ -474,7 +475,16 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                   </label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value as Category })}
+                    onChange={(e) => {
+                      const newCat = e.target.value as Category;
+                      const isDrink = newCat === 'bebidas';
+                      setFormData({
+                        ...formData,
+                        category: newCat,
+                        unit: isDrink ? 'lata' : (formData.unit === 'lata' || formData.unit === 'garrafa' ? 'unid' : formData.unit),
+                        requiresMeatPoint: isDrink ? false : formData.requiresMeatPoint,
+                      });
+                    }}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
                   >
                     <option value="espetos">Espetos & Jantinha</option>
@@ -593,17 +603,24 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
 
               {/* Toggles */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.requiresMeatPoint}
-                    onChange={(e) => setFormData({ ...formData, requiresMeatPoint: e.target.checked })}
-                    className="w-4 h-4 text-amber-500 rounded focus:ring-amber-400"
-                  />
-                  <span className="text-xs font-semibold text-slate-800">
-                    🥩 Requer escolha de Ponto da Carne (Mal passada / Ao Ponto / Bem passada)
-                  </span>
-                </label>
+                {formData.category === 'bebidas' ? (
+                  <div className="flex items-center space-x-2 text-xs text-blue-700 bg-blue-50 px-3 py-2 rounded-xl border border-blue-200">
+                    <span>🥤</span>
+                    <span className="font-semibold">Bebidas não necessitam de ponto da carne.</span>
+                  </div>
+                ) : (
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.requiresMeatPoint}
+                      onChange={(e) => setFormData({ ...formData, requiresMeatPoint: e.target.checked })}
+                      className="w-4 h-4 text-amber-500 rounded focus:ring-amber-400"
+                    />
+                    <span className="text-xs font-semibold text-slate-800">
+                      🥩 Requer escolha de Ponto da Carne (Mal passada / Ao Ponto / Bem passada)
+                    </span>
+                  </label>
+                )}
 
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -724,8 +741,8 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                 </div>
               </div>
 
-              {/* Meat Point selection if applicable */}
-              {tableModalProduct.requiresMeatPoint && (
+              {/* Meat Point selection if applicable (skewers/meats only, never beverages) */}
+              {!isBeverageProduct(tableModalProduct) && (isSkewerOrMeatProduct(tableModalProduct) || tableModalProduct.requiresMeatPoint) && (
                 <div className="space-y-1.5 pt-1">
                   <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide flex items-center gap-1">
                     <Flame className="w-3.5 h-3.5 text-orange-500" />
@@ -770,6 +787,8 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                   const itemSubtotal = tableModalProduct.price * tableQuantity;
                   const itemServiceFee = Number((itemSubtotal * 0.1).toFixed(2));
                   const itemTotal = Number((itemSubtotal + itemServiceFee).toFixed(2));
+                  const isDrink = isBeverageProduct(tableModalProduct);
+                  const isSkewer = !isDrink && (isSkewerOrMeatProduct(tableModalProduct) || tableModalProduct.requiresMeatPoint);
 
                   onCreateOrder({
                     tableOrCustomer: targetTable,
@@ -787,8 +806,8 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                         productName: tableModalProduct.name,
                         quantity: tableQuantity,
                         price: tableModalProduct.price,
-                        meatPoint: tableModalProduct.requiresMeatPoint ? tableMeatPoint : undefined,
-                        requiresMeatPoint: tableModalProduct.requiresMeatPoint,
+                        meatPoint: isSkewer ? tableMeatPoint : undefined,
+                        requiresMeatPoint: isSkewer,
                         status: 'aguardando',
                       },
                     ],

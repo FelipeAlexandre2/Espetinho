@@ -1,4 +1,4 @@
-import { Product, StockItem, Order, CashShift, AppUser, SystemLog, DEFAULT_ROLE_PERMISSIONS, MarmitaOption, MarmitaSizeConfig, MarmitaOrder, MarmitaSettings, SystemModule, SystemPermission, UserRole, MarmitaDailyMenu, DayOfWeekKey } from '../types';
+import { Product, StockItem, Order, CashShift, AppUser, SystemLog, DEFAULT_ROLE_PERMISSIONS, MarmitaOption, MarmitaSizeConfig, MarmitaOrder, MarmitaSettings, SystemModule, SystemPermission, UserRole, MarmitaDailyMenu, DayOfWeekKey, PrintJob } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_STOCK, INITIAL_ORDERS, INITIAL_CASH_SHIFT, INITIAL_USERS, INITIAL_LOGS } from '../data/mockData';
 import { INITIAL_MARMITA_OPTIONS, INITIAL_MARMITA_SIZES, INITIAL_MARMITA_ORDERS, INITIAL_MARMITA_SETTINGS, INITIAL_DAILY_MENUS } from '../data/marmitariaData';
 
@@ -698,6 +698,73 @@ export async function clearLogsFromApi(): Promise<void> {
     });
   } catch (e) {
     console.warn('Failed to clear logs from API', e);
+  }
+}
+
+// ================= PRINT QUEUE CLIENT (USB BRIDGE) =================
+export async function fetchPendingPrintJobs(): Promise<PrintJob[]> {
+  try {
+    const res = await fetch('/api/print-queue/pending');
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+  } catch (e) {
+    // Network fallback
+  }
+  return [];
+}
+
+export async function fetchPrintQueueHistory(): Promise<PrintJob[]> {
+  try {
+    const res = await fetch('/api/print-queue');
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+  } catch (e) {
+    // Fallback
+  }
+  return [];
+}
+
+export async function markPrintJobAsPrinted(jobId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/print-queue/${encodeURIComponent(jobId)}/printed`, {
+      method: 'POST',
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function reprintJob(jobId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/print-queue/${encodeURIComponent(jobId)}/reprint`, {
+      method: 'POST',
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function sendOrderToPrintQueue(
+  order: Order, 
+  type: 'etiqueta_mesa' | 'comanda_marmita' | 'cozinha' = 'etiqueta_mesa',
+  source: 'celular' | 'terminal' = 'celular'
+): Promise<boolean> {
+  try {
+    const res = await fetch('/api/print-queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order, type, source }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.warn('Failed to enqueue print job:', e);
+    return false;
   }
 }
 

@@ -5,7 +5,8 @@ import {
   ChevronRight, ArrowLeft, Utensils, Sparkles, CheckCircle2, 
   AlertCircle, ChefHat, RefreshCw, Smartphone, Eye, Info
 } from 'lucide-react';
-import { fetchOrdersFromApi, syncOrderToApi } from '../lib/storage';
+import { fetchOrdersFromApi, syncOrderToApi, sendOrderToPrintQueue } from '../lib/storage';
+import { isBeverageProduct, isSkewerOrMeatProduct } from '../utils/productUtils';
 
 interface CustomerMenuProps {
   products: Product[];
@@ -119,11 +120,14 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
   const handleAddToCart = () => {
     if (!selectedProduct) return;
 
+    const isDrink = isBeverageProduct(selectedProduct);
+    const isSkewer = !isDrink && (isSkewerOrMeatProduct(selectedProduct) || selectedProduct.requiresMeatPoint);
+
     const newItem: CartItem = {
       id: `cart-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       product: selectedProduct,
       quantity: modalQuantity,
-      meatPoint: selectedProduct.requiresMeatPoint ? modalMeatPoint : undefined,
+      meatPoint: isSkewer ? modalMeatPoint : undefined,
       notes: modalNotes.trim() ? modalNotes.trim() : undefined,
     };
 
@@ -203,12 +207,15 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
       // 1. Post to backend
       await syncOrderToApi(newOrder);
 
-      // 2. Notify parent app if attached
+      // 2. Enqueue for auto-printing on the computer USB printer
+      await sendOrderToPrintQueue(newOrder, 'etiqueta_mesa', 'celular');
+
+      // 3. Notify parent app if attached
       if (onOrderCreated) {
         onOrderCreated(newOrder);
       }
 
-      // 3. Clear cart and set active order tracking
+      // 4. Clear cart and set active order tracking
       setCart([]);
       setIsCartOpen(false);
       setActiveOrderId(newOrder.id);
@@ -218,7 +225,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
       // Refresh table orders
       await refreshTableOrders();
 
-      triggerToast('🎉 Pedido enviado para a churrasqueira!');
+      triggerToast('🖨️ Pedido enviado! A etiqueta 58mm sairá na impressora do computador.');
     } catch (err) {
       console.error('Failed to submit customer order:', err);
       alert('Houve um erro ao enviar o pedido. Por favor, tente novamente ou chame o garçom.');
@@ -563,8 +570,8 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
                 {selectedProduct.description || 'Grelhado artesanal preparado na brasa com tempero do chefe.'}
               </p>
 
-              {/* Meat Point Selector (if requiresMeatPoint) */}
-              {selectedProduct.requiresMeatPoint && (
+              {/* Meat Point Selector (if skewer/meat, never for beverages) */}
+              {!isBeverageProduct(selectedProduct) && (isSkewerOrMeatProduct(selectedProduct) || selectedProduct.requiresMeatPoint) && (
                 <div className="space-y-2 bg-slate-800/70 border border-slate-750 p-3.5 rounded-2xl">
                   <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
                     <span>🥩</span>

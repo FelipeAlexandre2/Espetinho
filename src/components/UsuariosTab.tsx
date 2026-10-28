@@ -1658,17 +1658,12 @@ export const UsuariosTab: React.FC<UsuariosTabProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Largura Padrão da Bobina Térmica
+                    Largura da Bobina Térmica
                   </label>
-                  <select
-                    value={empresaSettings.defaultPaperWidth || '80mm'}
-                    onChange={(e) => setEmpresaSettings({ ...empresaSettings, defaultPaperWidth: e.target.value as ReceiptPaperWidth })}
-                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 font-bold"
-                  >
-                    <option value="80mm">80mm (Bobina padrão balcão / Epson / Elgin / Bematech)</option>
-                    <option value="58mm">58mm (Mini impressora Bluetooth portátil)</option>
-                    <option value="a4">A4 (Impressora padrão / Folha inteira)</option>
-                  </select>
+                  <div className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 flex items-center justify-between">
+                    <span>58mm (Padrão único fixo)</span>
+                    <span className="text-[11px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">Ativo</span>
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">

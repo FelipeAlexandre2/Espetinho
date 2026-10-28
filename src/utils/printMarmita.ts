@@ -53,29 +53,62 @@ export function generateMarmitaLabelHtml(
         <div style="margin-bottom: 10px; padding: 6px; border: 2px solid #000000; border-radius: 4px; background: #ffffff;">
           <!-- Marmita Header Badge -->
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000000; padding-bottom: 4px; margin-bottom: 6px;">
-            <span style="font-size: ${sizeBadgeFontSize}; font-weight: 900; text-transform: uppercase;">
-              🍱 ${item.quantity}x ${item.sizeName.toUpperCase()}
-            </span>
+            <div>
+              <div style="font-size: ${sizeBadgeFontSize}; font-weight: 900; text-transform: uppercase;">
+                🍱 ${item.quantity}x ${item.sizeName.toUpperCase()}
+              </div>
+              ${
+                item.dishName
+                  ? `<div style="font-size: ${meatFontSize}; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-top: 2px;">
+                      🍲 ${item.dishName.toUpperCase()}
+                    </div>`
+                  : ''
+              }
+            </div>
             <span style="font-size: ${baseFontSize}; font-weight: 900; background: #000000; color: #ffffff; padding: 2px 6px; border-radius: 2px;">
               ${marmitaNumberText}
             </span>
           </div>
 
-          <!-- CARNES (DESTAQUE ABSOLUTO) -->
-          <div style="background: #f1f5f9; border-left: 4px solid #000000; padding: 4px 6px; margin-bottom: 6px;">
-            <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #000000; letter-spacing: 0.5px;">
-              🥩 CARNES / PROTEÍNAS:
-            </div>
-            <div style="font-size: ${meatFontSize}; font-weight: 900; text-transform: uppercase; color: #000000; line-height: 1.25;">
-              ${item.proteinas.length > 0 ? item.proteinas.join(' + ') : 'SEM CARNE ESPECIFICADA'}
-            </div>
-          </div>
-
-          <!-- BASE & FEIJAO -->
-          <div style="font-size: ${baseFontSize}; margin-bottom: 4px; line-height: 1.3;">
-            <strong>🍚 Base:</strong> ${item.bases.join(', ')} | <strong>Feijão:</strong> ${item.feijoes.join(', ')}
-          </div>
-
+          <!-- ALERTA DE EXCLUSÃO (SEM ALGO) -->
+          ${
+            item.without && item.without.length > 0
+              ? `<div style="background: #000000; color: #ffffff; padding: 4px 6px; margin-bottom: 6px; border-radius: 3px; font-weight: 900; font-size: ${meatFontSize}; text-transform: uppercase; letter-spacing: 0.5px;">
+                  🚫 SEM: ${item.without.join(', ').toUpperCase()}
+                </div>`
+              : ''
+          }
+          <!-- O QUE VAI NA MARMITA (COMPOSIÇÃO MANUAL) -->
+          ${
+            item.description
+              ? `<div style="background: #f1f5f9; border-left: 4px solid #000000; padding: 4px 6px; margin-bottom: 6px;">
+                  <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #000000; letter-spacing: 0.5px;">
+                    📝 VAI NA MARMITA:
+                  </div>
+                  <div style="font-size: ${meatFontSize}; font-weight: 900; text-transform: uppercase; color: #000000; line-height: 1.25;">
+                    ${item.description}
+                  </div>
+                </div>`
+              : (item.proteinas.length > 0 && item.proteinas[0] !== 'Marmita'
+                ? `<div style="background: #f1f5f9; border-left: 4px solid #000000; padding: 4px 6px; margin-bottom: 6px;">
+                    <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #000000; letter-spacing: 0.5px;">
+                      🥩 CARNES / PROTEÍNAS:
+                    </div>
+                    <div style="font-size: ${meatFontSize}; font-weight: 900; text-transform: uppercase; color: #000000; line-height: 1.25;">
+                      ${item.proteinas.join(' + ')}
+                    </div>
+                  </div>`
+                : '')
+          }
+          <!-- BASE & FEIJAO (SE HOUVER) -->
+          ${
+            item.bases.length > 0 || item.feijoes.length > 0
+              ? `<div style="font-size: ${baseFontSize}; margin-bottom: 4px; line-height: 1.3;">
+                  ${item.bases.length > 0 ? `<strong>🍚 Base:</strong> ${item.bases.join(', ')} ` : ''}
+                  ${item.feijoes.length > 0 ? `| <strong>Feijão:</strong> ${item.feijoes.join(', ')}` : ''}
+                </div>`
+              : ''
+          }
           <!-- GUARNIÇÕES -->
           ${
             item.guarnicoes.length > 0
@@ -450,7 +483,11 @@ export function formatMarmitaWhatsAppText(order: MarmitaOrder, settings: Marmita
       const adicionais = item.adicionais.length > 0 ? `\n   • Extras: ${item.adicionais.map((a) => a.name).join(', ')}` : '';
       const obs = item.notes ? `\n   • ⚠️ Obs: ${item.notes}` : '';
 
-      return `🍱 *${count}${item.quantity}x Marmita ${item.sizeName.toUpperCase()}*\n   • *Carnes:* ${proteinas}\n   • Base: ${bases}${guarnicoes}${saladas}${adicionais}${obs}`;
+      const dish = item.dishName ? `\n   🍲 *Prato:* ${item.dishName}` : '';
+      const withoutAlert = item.without && item.without.length > 0 ? `\n   🚫 *SEM:* ${item.without.join(', ')}` : '';
+      const desc = item.description ? `\n   • *Vai na marmita:* ${item.description}` : (item.proteinas.length > 0 ? `\n   • *Carnes:* ${proteinas}` : '');
+      const baseLine = (item.bases.length > 0 || item.feijoes.length > 0) ? `\n   • Base: ${bases}` : '';
+      return `🍱 *${count}${item.quantity}x Marmita ${item.sizeName.toUpperCase()}*${dish}${withoutAlert}${desc}${baseLine}${guarnicoes}${saladas}${adicionais}${obs}`;
     })
     .join('\n\n');
 

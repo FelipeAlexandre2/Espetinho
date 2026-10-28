@@ -92,7 +92,7 @@ export interface ReceiptSettings {
 
 export type ReceiptFontSize = 'normal' | 'grande';
 export type ReceiptPaperWidth = '80mm' | '58mm' | 'a4';
-export type ReceiptType = 'cliente' | 'cozinha' | 'pre_conta' | 'etiqueta_mesa';
+export type ReceiptType = 'cliente' | 'cozinha' | 'pre_conta' | 'etiqueta_mesa' | 'comanda_marmita';
 
 export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   restaurantName: 'MARESIA',
@@ -104,10 +104,23 @@ export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   autoCut: true,
   pixKey: '(67) 99125-6083',
   pixKeyType: 'celular',
-  defaultPaperWidth: '80mm',
+  defaultPaperWidth: '58mm',
   fontSize: 'grande',
   autoPrintOnOrderCreate: true,
 };
+
+export interface PrintJob {
+  id: string;
+  orderId: string;
+  orderNumber: number;
+  tableName: string;
+  type: 'etiqueta_mesa' | 'comanda_marmita' | 'cozinha';
+  order: Order;
+  printed: boolean;
+  printedAt?: string;
+  createdAt: string;
+  source: 'celular' | 'terminal';
+}
 
 export interface StockItem {
   id: string;
@@ -420,6 +433,8 @@ export const TABLES = [
   'Para Viagem', 'Delivery'
 ];
 
+export const TABLE_OPTIONS = TABLES;
+
 /**
  * Checks if a given user has a specific system permission.
  * - Explicit user permissions are checked first (with string JSON parsing safety).
@@ -610,6 +625,9 @@ export interface MarmitaItem {
   id: string;
   size: MarmitaSize;
   sizeName: string;
+  dishName?: string; // O que é a marmita (Ex: "Bife Acebolado com Purê", "Carne de Panela")
+  description?: string; // Descrição manual do que vai na marmita (Ex: "Arroz, feijão, bife acebolado, batata frita e vinagrete")
+  without?: string[]; // Se é sem alguma coisa (Ex: ["Sem Cebola", "Sem Feijão"])
   bases: string[]; // e.g. ["Arroz Branco"]
   feijoes: string[]; // e.g. ["Feijão Carioca"]
   proteinas: string[]; // e.g. ["Bife Acebolado", "Frango Grelhado"]

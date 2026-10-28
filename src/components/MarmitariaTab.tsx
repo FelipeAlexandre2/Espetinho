@@ -2,20 +2,15 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   MarmitaSize, MarmitaSizeConfig, MarmitaOption, MarmitaItem, 
   MarmitaOrder, MarmitaOrderStatus, MarmitaDeliveryType, MarmitaSettings,
-  PaymentMethod, AppUser, MarmitaDailyMenu, DayOfWeekKey
+  PaymentMethod, AppUser
 } from '../types';
 import { 
-  printMarmitaThermalDirect, formatMarmitaWhatsAppText,
-  MarmitaLabelMode, MarmitaPaperWidth, MarmitaFontSize
+  printMarmitaThermalDirect, formatMarmitaWhatsAppText
 } from '../utils/printMarmita';
 import { 
-  loadMarmitaDailyMenus, saveMarmitaDailyMenus, getTodayDayOfWeekKey 
-} from '../lib/storage';
-import { 
   Utensils, Plus, Minus, Trash2, CheckCircle2, Clock, 
-  Motorbike, ShoppingBag, MapPin, Phone, MessageSquare, 
-  Printer, Search, DollarSign, Calendar, Check, ArrowRight,
-  ChefHat, Tag, Send, Sparkles, Copy, Edit3, Save, Share2
+  ShoppingBag, Printer, Search, DollarSign, Check, ArrowRight,
+  ChefHat, Send, Sparkles, Share2, Edit2, X
 } from 'lucide-react';
 
 interface MarmitariaTabProps {
@@ -30,7 +25,7 @@ interface MarmitariaTabProps {
   onUpdateOrderStatus: (orderId: string, status: MarmitaOrderStatus, motoboyName?: string) => void;
   onUpdateOrder: (order: MarmitaOrder) => void;
   onDeleteOrder: (orderId: string) => void;
-  onUpdateSettings: (settings: MarmitaSettings) => void;
+  onUpdateSettings?: (settings: MarmitaSettings) => void;
   onSwitchToEspetos?: () => void;
 }
 
@@ -47,9 +42,18 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
   onDeleteOrder,
   onSwitchToEspetos
 }) => {
-  // Navigation: 3 clean tabs
-  const [activeTab, setActiveTab] = useState<'novo_pedido' | 'fila_kds' | 'cardapio_dia'>('novo_pedido');
+  // Navigation: 3 tabs (Montar Marmita, Fila de Pedidos, Cadastrar Preço)
+  const [activeTab, setActiveTab] = useState<'novo_pedido' | 'fila_kds' | 'precos'>('novo_pedido');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Form state for registering price: strictly size and price
+  const [registerSizeName, setRegisterSizeName] = useState<string>('Pequena (P)');
+  const [registerPriceInput, setRegisterPriceInput] = useState<string>('16.00');
+  const [inlinePriceInputs, setInlinePriceInputs] = useState<Record<string, number>>({});
+
+  // Price Edit Modal for P, M, G (inline adjustment)
+  const [isEditingPrices, setIsEditingPrices] = useState(false);
+  const [tempPrices, setTempPrices] = useState<Record<string, number>>({});
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -59,11 +63,10 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
   };
 
   /* =========================================================================
-   * SIZES: Strictly PEQUENA (P), MÉDIA (M), GRANDE (G)
+   * SIZES: Marmita Sizes and Prices
    * ========================================================================= */
   const cleanSizes = useMemo(() => {
-    const list = propSizes.filter((s) => s.size === 'P' || s.size === 'M' || s.size === 'G');
-    if (list.length > 0) return list;
+    if (propSizes && propSizes.length > 0) return propSizes;
     return [
       {
         size: 'P' as MarmitaSize,
@@ -99,104 +102,86 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
   }, [propSizes]);
 
   /* =========================================================================
-   * DAILY MENUS: Campo para cadastrar o cardápio de cada dia
+   * AVAILABLE PROTEÍNAS & ACOMPANHAMENTOS (Permanent list, no day-of-week)
    * ========================================================================= */
-  const [dailyMenus, setDailyMenus] = useState<MarmitaDailyMenu[]>(() => loadMarmitaDailyMenus());
-  const todayKey = useMemo(() => getTodayDayOfWeekKey(), []);
-  const [selectedDayKey, setSelectedDayKey] = useState<DayOfWeekKey>(todayKey);
+  const defaultCarnes = useMemo(() => {
+    const fromOptions = (options || [])
+      .filter((o) => o.category === 'proteina' && o.isAvailableToday !== false)
+      .map((o) => o.name);
 
-  // Form inputs for selected day's menu
-  const activeMenu = useMemo(() => {
-    return dailyMenus.find((m) => m.dayKey === selectedDayKey) || dailyMenus[0];
-  }, [dailyMenus, selectedDayKey]);
+    if (fromOptions.length > 0) return fromOptions;
 
-  const [editCarnes, setEditCarnes] = useState<string>('');
-  const [editAcompanhamentos, setEditAcompanhamentos] = useState<string>('');
-  const [editDestaque, setEditDestaque] = useState<string>('');
-  const [editObservacoes, setEditObservacoes] = useState<string>('');
+    return [
+      'Bife Bovino Acebolado',
+      'Filé de Frango Grelhado',
+      'Carne de Panela com Batatas',
+      'Linguiça Toscana Grelhada',
+      'Strogonoff de Frango',
+      'Frango a Passarinho',
+      'Bisteca Suína Douradinha',
+      'Feijoada Completa',
+      'Costelinha Suína'
+    ];
+  }, [options]);
 
-  // Sync edit fields when changing day
+  const defaultSides = useMemo(() => {
+    const fromOptions = (options || [])
+      .filter((o) => (o.category === 'guarnicao' || o.category === 'salada') && o.isAvailableToday !== false)
+      .map((o) => o.name);
+
+    if (fromOptions.length > 0) return fromOptions;
+
+    return [
+      'Farofa da Casa',
+      'Macarrão Espaguete ao Sugo',
+      'Purê de Batatas',
+      'Batata Frita',
+      'Vinagrete Fresco',
+      'Couve Refogada no Alho',
+      'Salada de Maionese',
+      'Legumes no Vapor'
+    ];
+  }, [options]);
+
+  const [availableCarnes, setAvailableCarnes] = useState<string[]>(defaultCarnes);
+  const [availableSides, setAvailableSides] = useState<string[]>(defaultSides);
+  const [newCarneInput, setNewCarneInput] = useState('');
+  const [showAddCarne, setShowAddCarne] = useState(false);
+  const [newSideInput, setNewSideInput] = useState('');
+  const [showAddSide, setShowAddSide] = useState(false);
+
   useEffect(() => {
-    if (activeMenu) {
-      setEditCarnes(activeMenu.carnes.join(', '));
-      setEditAcompanhamentos(activeMenu.acompanhamentos.join(', '));
-      setEditDestaque(activeMenu.destaquePrato || '');
-      setEditObservacoes(activeMenu.observacoes || '');
+    if (defaultCarnes.length > 0 && availableCarnes.length === 0) {
+      setAvailableCarnes(defaultCarnes);
     }
-  }, [activeMenu]);
+  }, [defaultCarnes, availableCarnes.length]);
 
-  // Today's active menu in PDV
-  const todayMenu = useMemo(() => {
-    return dailyMenus.find((m) => m.dayKey === todayKey) || dailyMenus[0];
-  }, [dailyMenus, todayKey]);
+  useEffect(() => {
+    if (defaultSides.length > 0 && availableSides.length === 0) {
+      setAvailableSides(defaultSides);
+    }
+  }, [defaultSides, availableSides.length]);
 
-  const handleSaveDayMenu = () => {
-    const carnesList = editCarnes
-      .split(/[,;\n]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    const acompanhamentosList = editAcompanhamentos
-      .split(/[,;\n]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    const updated = dailyMenus.map((m) => {
-      if (m.dayKey === selectedDayKey) {
-        return {
-          ...m,
-          carnes: carnesList.length > 0 ? carnesList : ['Bife Acebolado', 'Frango Grelhado'],
-          acompanhamentos: acompanhamentosList.length > 0 ? acompanhamentosList : ['Arroz Branco', 'Feijão Carioca', 'Farofa'],
-          destaquePrato: editDestaque.trim() || undefined,
-          observacoes: editObservacoes.trim() || undefined,
-        };
-      }
-      return m;
-    });
-
-    setDailyMenus(updated);
-    saveMarmitaDailyMenus(updated);
-    showToast(`✅ Cardápio de ${activeMenu?.dayLabel || selectedDayKey} salvo com sucesso!`);
+  const handleAddCustomCarne = () => {
+    const trimmed = newCarneInput.trim();
+    if (trimmed && !availableCarnes.includes(trimmed)) {
+      setAvailableCarnes((prev) => [...prev, trimmed]);
+      setSelectedProteinas((prev) => [...prev, trimmed]);
+      setNewCarneInput('');
+      setShowAddCarne(false);
+      showToast(`Carne "${trimmed}" adicionada!`);
+    }
   };
 
-  // Copy WhatsApp Formatted Daily Menu
-  const handleCopyWhatsAppMenu = (menuToCopy = activeMenu) => {
-    if (!menuToCopy) return;
-
-    const priceP = cleanSizes.find((s) => s.size === 'P')?.price || 16.00;
-    const priceM = cleanSizes.find((s) => s.size === 'M')?.price || 20.00;
-    const priceG = cleanSizes.find((s) => s.size === 'G')?.price || 25.00;
-
-    let text = `*🍱 CARDÁPIO DE HOJE — ${menuToCopy.dayLabel.toUpperCase()}*\n`;
-    text += `*${settings.restaurantName || 'Maresia Gastronomia'}*\n\n`;
-
-    if (menuToCopy.destaquePrato) {
-      text += `⭐ *DESTAQUE DO DIA:*\n${menuToCopy.destaquePrato}\n\n`;
+  const handleAddCustomSide = () => {
+    const trimmed = newSideInput.trim();
+    if (trimmed && !availableSides.includes(trimmed)) {
+      setAvailableSides((prev) => [...prev, trimmed]);
+      setSelectedSides((prev) => [...prev, trimmed]);
+      setNewSideInput('');
+      setShowAddSide(false);
+      showToast(`Acompanhamento "${trimmed}" adicionado!`);
     }
-
-    text += `🥩 *OPÇÕES DE CARNES:*\n`;
-    menuToCopy.carnes.forEach((c) => {
-      text += `• ${c}\n`;
-    });
-
-    text += `\n🥗 *ACOMPANHAMENTOS:*\n`;
-    menuToCopy.acompanhamentos.forEach((a) => {
-      text += `• ${a}\n`;
-    });
-
-    text += `\n📦 *TAMANHOS E VALORES:*\n`;
-    text += `• *Pequena (P):* R$ ${priceP.toFixed(2).replace('.', ',')} (1 carne)\n`;
-    text += `• *Média (M):* R$ ${priceM.toFixed(2).replace('.', ',')} (1 carne)\n`;
-    text += `• *Grande (G):* R$ ${priceG.toFixed(2).replace('.', ',')} (até 2 carnes)\n\n`;
-
-    if (menuToCopy.observacoes) {
-      text += `💡 _${menuToCopy.observacoes}_\n\n`;
-    }
-
-    text += `🛵 *Faça seu pedido pelo WhatsApp:*\n${settings.phoneWhatsapp || ''}`;
-
-    navigator.clipboard.writeText(text);
-    showToast('📋 Cardápio copiado! Pronto para colar no WhatsApp!');
   };
 
   /* =========================================================================
@@ -206,9 +191,21 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
   const [selectedProteinas, setSelectedProteinas] = useState<string[]>([]);
   const [selectedBases, setSelectedBases] = useState<string[]>(['Arroz Branco']);
   const [selectedFeijoes, setSelectedFeijoes] = useState<string[]>(['Feijão Carioca']);
-  const [selectedSides, setSelectedSides] = useState<string[]>(['Farofa']);
+  const [selectedSides, setSelectedSides] = useState<string[]>(['Farofa da Casa']);
   const [marmitaNotes, setMarmitaNotes] = useState('');
   const [marmitaQuantity, setMarmitaQuantity] = useState(1);
+
+  // O que é a marmita e se é sem alguma coisa
+  const [marmitaDishName, setMarmitaDishName] = useState('');
+  const [marmitaDescription, setMarmitaDescription] = useState('');
+  const [withoutTags, setWithoutTags] = useState<string[]>([]);
+  const [customWithout, setCustomWithout] = useState('');
+
+  const handleToggleWithoutTag = (tag: string) => {
+    setWithoutTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
 
   // Cart for current order
   const [cartItems, setCartItems] = useState<MarmitaItem[]>([]);
@@ -230,31 +227,32 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
   const [orderSearch, setOrderSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
 
-  // Active Size Config
+  // Active Size config
   const currentSizeConfig = useMemo(() => {
     return cleanSizes.find((s) => s.size === selectedSize) || cleanSizes[1] || cleanSizes[0];
   }, [cleanSizes, selectedSize]);
 
-  // Set default protein from today's menu if none selected
+  // Set default protein if none selected
   useEffect(() => {
-    if (selectedProteinas.length === 0 && todayMenu && todayMenu.carnes.length > 0) {
-      setSelectedProteinas([todayMenu.carnes[0]]);
+    if (selectedProteinas.length === 0 && availableCarnes.length > 0) {
+      setSelectedProteinas([availableCarnes[0]]);
     }
-  }, [todayMenu]);
+  }, [availableCarnes, selectedProteinas.length]);
 
   // Calculate current marmita price
   const currentMarmitaPrice = useMemo(() => {
     let total = currentSizeConfig.price;
     // Extra meats beyond limit: +R$ 7,00 each
     if (selectedProteinas.length > currentSizeConfig.maxProteins) {
-      total += (selectedProteinas.length - currentSizeConfig.maxProteins) * 7.00;
+      const extraCount = selectedProteinas.length - currentSizeConfig.maxProteins;
+      total += extraCount * 7.00;
     }
     return total;
   }, [currentSizeConfig, selectedProteinas]);
 
-  // Order Cart Totals
+  // Subtotal of cart
   const cartSubtotal = useMemo(() => {
-    return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    return cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   }, [cartItems]);
 
   const effectiveDeliveryFee = deliveryType === 'entrega' ? deliveryFee : 0;
@@ -287,19 +285,29 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
 
   // Add marmita to order cart
   const handleAddMarmita = () => {
-    if (selectedProteinas.length === 0) {
-      showToast('⚠️ Selecione a carne para a marmita!');
+    if (!marmitaDescription.trim() && !marmitaDishName.trim()) {
+      showToast('⚠️ Descreva o que vai na marmita ou dê um nome ao prato!');
       return;
     }
+
+    const allWithout = [...withoutTags];
+    if (customWithout.trim() && !allWithout.includes(customWithout.trim())) {
+      allWithout.push(customWithout.trim());
+    }
+
+    const titleOrFirst = marmitaDishName.trim() || marmitaDescription.trim().split(',')[0].trim() || 'Marmita';
 
     const newItem: MarmitaItem = {
       id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       size: selectedSize,
       sizeName: currentSizeConfig.label,
-      bases: selectedBases.length > 0 ? selectedBases : ['Arroz Branco'],
-      feijoes: selectedFeijoes.length > 0 ? selectedFeijoes : ['Feijão Carioca'],
-      proteinas: selectedProteinas,
-      guarnicoes: selectedSides,
+      dishName: marmitaDishName.trim() || undefined,
+      description: marmitaDescription.trim() || undefined,
+      without: allWithout.length > 0 ? allWithout : undefined,
+      bases: [],
+      feijoes: [],
+      proteinas: [titleOrFirst],
+      guarnicoes: [],
       saladas: [],
       adicionais: [],
       price: currentMarmitaPrice,
@@ -308,6 +316,10 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
     };
 
     setCartItems((prev) => [...prev, newItem]);
+    setMarmitaDishName('');
+    setMarmitaDescription('');
+    setWithoutTags([]);
+    setCustomWithout('');
     setMarmitaNotes('');
     setMarmitaQuantity(1);
     showToast(`✅ Marmita ${currentSizeConfig.label} adicionada!`);
@@ -319,18 +331,26 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
 
     // If cart is empty, automatically add the current assembled marmita
     if (itemsToSave.length === 0) {
-      if (selectedProteinas.length === 0) {
-        showToast('⚠️ Selecione uma carne antes de confirmar o pedido!');
+      if (!marmitaDescription.trim() && !marmitaDishName.trim()) {
+        showToast('⚠️ Adicione ao menos uma marmita ou descreva os itens!');
         return;
       }
+      const allWithout = [...withoutTags];
+      if (customWithout.trim() && !allWithout.includes(customWithout.trim())) {
+        allWithout.push(customWithout.trim());
+      }
+      const titleOrFirst = marmitaDishName.trim() || marmitaDescription.trim().split(',')[0].trim() || 'Marmita';
       itemsToSave.push({
         id: `item-${Date.now()}`,
         size: selectedSize,
         sizeName: currentSizeConfig.label,
-        bases: selectedBases,
-        feijoes: selectedFeijoes,
-        proteinas: selectedProteinas,
-        guarnicoes: selectedSides,
+        dishName: marmitaDishName.trim() || undefined,
+        description: marmitaDescription.trim() || undefined,
+        without: allWithout.length > 0 ? allWithout : undefined,
+        bases: [],
+        feijoes: [],
+        proteinas: [titleOrFirst],
+        guarnicoes: [],
         saladas: [],
         adicionais: [],
         price: currentMarmitaPrice,
@@ -364,81 +384,247 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
     };
 
     onCreateOrder(newOrder);
+
+    // Reset Form
     setCartItems([]);
     setCustomerName('');
     setCustomerPhone('');
     setAddressOrTable('');
     setMarmitaNotes('');
-    showToast(`🎉 Pedido #${newOrder.orderNumber} lançado com sucesso!`);
+    setMarmitaQuantity(1);
+
+    // Open Thermal Printing modal
     setPrintOrderModal(newOrder);
+    showToast(`🎉 Pedido #${newOrder.orderNumber} lançado com sucesso!`);
   };
 
-  // Advance KDS order status
-  const handleAdvanceStatus = (order: MarmitaOrder) => {
-    let nextStatus: MarmitaOrderStatus = order.status;
-    if (order.status === 'novo') nextStatus = 'em_montagem';
-    else if (order.status === 'em_montagem') nextStatus = 'pronto_embalado';
-    else if (order.status === 'pronto_embalado') {
-      nextStatus = order.deliveryType === 'entrega' ? 'saiu_para_entrega' : 'entregue';
-    } else if (order.status === 'saiu_para_entrega') {
-      nextStatus = 'entregue';
-    }
-    onUpdateOrderStatus(order.id, nextStatus);
-  };
-
-  // Print thermal receipt
+  // Print Thermal Label
   const handlePrint = async () => {
     if (!printOrderModal) return;
     setIsPrintingLabel(true);
     try {
       await printMarmitaThermalDirect(printOrderModal, settings, {
-        mode: 'tampa',
-        paperWidth: '80mm',
-        fontSize: 'grande',
-        singleItemIndex: 'all',
+        mode: 'comanda',
+        paperWidth: '58mm',
+        fontSize: 'normal'
       });
+      showToast('🖨️ Etiqueta enviada para impressão!');
+    } catch {
+      showToast('⚠️ Verifique a conexão com a impressora.');
     } finally {
       setIsPrintingLabel(false);
     }
   };
 
+  // Share order on WhatsApp
   const handleShareWhatsApp = () => {
     if (!printOrderModal) return;
     const text = formatMarmitaWhatsAppText(printOrderModal, settings);
-    const phone = printOrderModal.customerPhone?.replace(/\D/g, '') || '';
+    const phone = (printOrderModal.customerPhone || '').replace(/\D/g, '');
     const url = phone
       ? `https://api.whatsapp.com/send?phone=55${phone}&text=${encodeURIComponent(text)}`
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
 
-  const activeOrders = orders.filter((o) => o.status !== 'entregue' && o.status !== 'cancelado');
-  const filteredOrders = orders.filter((o) => {
-    const matchesSearch = 
-      orderSearch === '' ||
-      o.orderNumber.toString().includes(orderSearch) ||
-      o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      (o.tableOrAddress && o.tableOrAddress.toLowerCase().includes(orderSearch.toLowerCase()));
+  // Copy WhatsApp Formatted Marmitaria Menu
+  const handleCopyWhatsAppMenu = () => {
+    const priceP = cleanSizes.find((s) => s.size === 'P')?.price || 16.00;
+    const priceM = cleanSizes.find((s) => s.size === 'M')?.price || 20.00;
+    const priceG = cleanSizes.find((s) => s.size === 'G')?.price || 25.00;
 
-    const matchesStatus = statusFilter === 'todos' || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+    let text = `*🍱 CARDÁPIO DE MARMITAS & MARMITEX*\n`;
+    text += `*${settings.restaurantName || 'Maresia Gastronomia'}*\n\n`;
 
-  const weekDays: { key: DayOfWeekKey; label: string; short: string }[] = [
-    { key: 'segunda', label: 'Segunda-feira', short: 'Seg' },
-    { key: 'terca', label: 'Terça-feira', short: 'Ter' },
-    { key: 'quarta', label: 'Quarta-feira', short: 'Qua' },
-    { key: 'quinta', label: 'Quinta-feira', short: 'Qui' },
-    { key: 'sexta', label: 'Sexta-feira', short: 'Sex' },
-    { key: 'sabado', label: 'Sábado', short: 'Sáb' },
-    { key: 'domingo', label: 'Domingo', short: 'Dom' },
-  ];
+    text += `📦 *TAMANHOS E VALORES:*\n`;
+    text += `• *Pequena (P):* R$ ${priceP.toFixed(2).replace('.', ',')} (1 carne inclusa)\n`;
+    text += `• *Média (M):* R$ ${priceM.toFixed(2).replace('.', ',')} (1 carne caprichada)\n`;
+    text += `• *Grande (G):* R$ ${priceG.toFixed(2).replace('.', ',')} (até 2 carnes)\n\n`;
+
+    text += `🥩 *OPÇÕES DE CARNES:*\n`;
+    availableCarnes.slice(0, 8).forEach((c) => {
+      text += `• ${c}\n`;
+    });
+
+    text += `\n🥗 *ACOMPANHAMENTOS & GUARNIÇÕES:*\n`;
+    availableSides.slice(0, 8).forEach((a) => {
+      text += `• ${a}\n`;
+    });
+    text += `_Acompanha arroz e feijão fresquinho._\n\n`;
+
+    if (settings.phoneWhatsapp) {
+      text += `🛵 *Peça pelo WhatsApp:*\n${settings.phoneWhatsapp}\n`;
+    }
+    text += `Entregamos quentinho na sua casa ou empresa!`;
+
+    navigator.clipboard.writeText(text);
+    showToast('📋 Cardápio copiado! Pronto para colar no WhatsApp!');
+  };
+
+  // Open price editor
+  const handleOpenPriceEditor = () => {
+    const initialMap: Record<string, number> = {};
+    cleanSizes.forEach((s) => {
+      initialMap[s.size] = s.price;
+    });
+    setTempPrices(initialMap);
+    setIsEditingPrices(true);
+  };
+
+  const handleSavePrices = () => {
+    const updated = cleanSizes.map((s) => {
+      const p = tempPrices[s.size];
+      return p && p > 0 ? { ...s, price: p } : s;
+    });
+    onUpdateSizes(updated);
+    setIsEditingPrices(false);
+    showToast('✅ Preços das marmitas atualizados com sucesso!');
+  };
+
+  // Handler: Register or update price for a size (only size and price)
+  const handleSaveRegisteredPrice = (nameToSave: string, priceVal: number) => {
+    if (!nameToSave.trim() || isNaN(priceVal) || priceVal <= 0) {
+      showToast('⚠️ Informe o tamanho e um preço válido maior que R$ 0,00!');
+      return;
+    }
+
+    const trimmed = nameToSave.trim();
+    const isP = trimmed.toLowerCase().includes('pequena') || trimmed.toUpperCase() === 'P';
+    const isM = trimmed.toLowerCase().includes('média') || trimmed.toLowerCase().includes('media') || trimmed.toUpperCase() === 'M';
+    const isG = trimmed.toLowerCase().includes('grande') || trimmed.toUpperCase() === 'G';
+
+    const targetKey = isP ? 'P' : isM ? 'M' : isG ? 'G' : null;
+
+    const existingIndex = cleanSizes.findIndex(
+      (s) => (targetKey && s.size === targetKey) ||
+             s.label.toLowerCase() === trimmed.toLowerCase() ||
+             s.name.toLowerCase() === trimmed.toLowerCase()
+    );
+
+    let updatedList: MarmitaSizeConfig[];
+    if (existingIndex >= 0) {
+      updatedList = cleanSizes.map((s, idx) =>
+        idx === existingIndex ? { ...s, price: priceVal } : s
+      );
+    } else {
+      const newConfig: MarmitaSizeConfig = {
+        size: 'executiva' as MarmitaSize,
+        label: trimmed,
+        name: `Marmita ${trimmed}`,
+        price: priceVal,
+        maxProteins: 1,
+        maxSides: 3,
+        description: `Marmita ${trimmed}`,
+        badgeColor: 'bg-orange-50 text-orange-800 border-orange-300'
+      };
+      updatedList = [...cleanSizes, newConfig];
+    }
+
+    onUpdateSizes(updatedList);
+    showToast(`✅ Preço salvo: ${trimmed} -> R$ ${priceVal.toFixed(2).replace('.', ',')}`);
+  };
+
+  const handleSaveInlinePrice = (targetLabel: string, priceVal: number) => {
+    if (isNaN(priceVal) || priceVal <= 0) {
+      showToast('⚠️ Informe um valor válido!');
+      return;
+    }
+    const updatedList = cleanSizes.map((s) => {
+      if (s.label === targetLabel || s.name === targetLabel || s.size === targetLabel) {
+        return { ...s, price: priceVal };
+      }
+      return s;
+    });
+    onUpdateSizes(updatedList);
+    showToast(`✅ Preço atualizado: ${targetLabel} -> R$ ${priceVal.toFixed(2).replace('.', ',')}`);
+  };
+
+  const handleDeleteSize = (targetLabel: string) => {
+    if (cleanSizes.length <= 1) {
+      showToast('⚠️ Mantenha ao menos 1 tamanho de marmita cadastrado.');
+      return;
+    }
+    const updatedList = cleanSizes.filter((s) => s.label !== targetLabel && s.name !== targetLabel);
+    onUpdateSizes(updatedList);
+    showToast(`Tamanho "${targetLabel}" removido.`);
+  };
+
+  const handleResetDefaultPrices = () => {
+    const defaults: MarmitaSizeConfig[] = [
+      {
+        size: 'P' as MarmitaSize,
+        name: 'Marmita Pequena (P)',
+        label: 'Pequena (P)',
+        price: 16.00,
+        maxProteins: 1,
+        maxSides: 2,
+        description: '1 carne + arroz, feijão e acompanhamentos',
+        badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300'
+      },
+      {
+        size: 'M' as MarmitaSize,
+        name: 'Marmita Média (M)',
+        label: 'Média (M)',
+        price: 20.00,
+        maxProteins: 1,
+        maxSides: 3,
+        description: 'Tamanho mais pedido. 1 carne caprichada + guarnições',
+        badgeColor: 'bg-blue-50 text-blue-800 border-blue-300'
+      },
+      {
+        size: 'G' as MarmitaSize,
+        name: 'Marmita Grande (G)',
+        label: 'Grande (G)',
+        price: 25.00,
+        maxProteins: 2,
+        maxSides: 4,
+        description: 'Porção reforçada. Até 2 carnes generosas + guarnições',
+        badgeColor: 'bg-amber-50 text-amber-800 border-amber-300'
+      }
+    ];
+    onUpdateSizes(defaults);
+    showToast('Valores restaurados: P R$ 16,00 • M R$ 20,00 • G R$ 25,00');
+  };
+
+  // Advance Order Status in KDS
+  const handleAdvanceStatus = (order: MarmitaOrder) => {
+    const nextStatus: Record<MarmitaOrderStatus, MarmitaOrderStatus> = {
+      novo: 'em_montagem',
+      em_montagem: 'pronto_embalado',
+      pronto_embalado: order.deliveryType === 'entrega' ? 'saiu_para_entrega' : 'entregue',
+      saiu_para_entrega: 'entregue',
+      entregue: 'entregue',
+      cancelado: 'cancelado'
+    };
+    onUpdateOrderStatus(order.id, nextStatus[order.status]);
+    showToast(`Status do pedido #${order.orderNumber} atualizado!`);
+  };
+
+  // Filter KDS Orders
+  const filteredOrders = useMemo(() => {
+    return orders
+      .filter((o) => {
+        if (statusFilter !== 'todos' && o.status !== statusFilter) return false;
+        if (!orderSearch) return true;
+        const q = orderSearch.toLowerCase();
+        return (
+          o.orderNumber.toString().includes(q) ||
+          o.customerName.toLowerCase().includes(q) ||
+          (o.tableOrAddress && o.tableOrAddress.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [orders, statusFilter, orderSearch]);
+
+  const activeOrders = useMemo(() => {
+    return orders.filter((o) => o.status !== 'entregue' && o.status !== 'cancelado');
+  }, [orders]);
 
   return (
     <div className="space-y-4">
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-amber-500/40 flex items-center space-x-2 text-sm">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-amber-500/40 flex items-center space-x-2 text-sm animate-in fade-in duration-200">
           <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
           <span className="font-semibold">{toastMessage}</span>
         </div>
@@ -458,24 +644,36 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium">
-              Cardápio do Dia • Marmitas Pequena, Média e Grande
+              Montagem Rápida • Marmitas Pequena, Média e Grande • Balcão & Delivery
             </p>
           </div>
         </div>
 
-        {onSwitchToEspetos && (
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <button
             type="button"
-            onClick={onSwitchToEspetos}
-            className="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            onClick={handleCopyWhatsAppMenu}
+            className="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            title="Copiar texto do cardápio para WhatsApp"
           >
-            <span>Ir para Espetos</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Copiar p/ WhatsApp</span>
           </button>
-        )}
+
+          {onSwitchToEspetos && (
+            <button
+              type="button"
+              onClick={onSwitchToEspetos}
+              className="inline-flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            >
+              <span>Ir para Espetos</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Navigation: 3 Direct Tabs */}
+      {/* Navigation: Strictly 2 Clean Tabs */}
       <div className="flex items-center space-x-2 p-1 bg-slate-200/70 rounded-xl">
         <button
           type="button"
@@ -507,19 +705,6 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
             </span>
           )}
         </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('cardapio_dia')}
-          className={`flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-black transition-all flex items-center justify-center space-x-2 cursor-pointer ${
-            activeTab === 'cardapio_dia'
-              ? 'bg-white text-orange-600 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Calendar className="w-4 h-4" />
-          <span>3. Cardápio do Dia & Preços</span>
-        </button>
       </div>
 
       {/* =====================================================================
@@ -530,45 +715,20 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
           {/* Left Column: Fast Assembly Form */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-4">
             
-            {/* Banner of Today's Menu Highlight */}
-            {todayMenu && (
-              <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-3.5 rounded-2xl border border-orange-200/80 flex items-center justify-between gap-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold text-xs">
-                    📅
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-black uppercase text-orange-800 tracking-wider block">
-                      Cardápio de Hoje ({todayMenu.dayLabel}):
-                    </span>
-                    <p className="text-xs font-bold text-slate-800 truncate">
-                      {todayMenu.destaquePrato ? `⭐ ${todayMenu.destaquePrato} • ` : ''}
-                      {todayMenu.carnes.join(' • ')}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleCopyWhatsAppMenu(todayMenu)}
-                  className="bg-white hover:bg-orange-100 text-orange-700 px-3 py-1.5 rounded-xl border border-orange-200 text-xs font-black shrink-0 flex items-center space-x-1 cursor-pointer transition-all"
-                  title="Copiar cardápio formatado para WhatsApp"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">WhatsApp</span>
-                </button>
-              </div>
-            )}
-
-            {/* Step 1: Tipos de Marmita (Pequena, Média e Grande) */}
+            {/* Step 1: Tipos de Marmita (Pequena, Média e Grande) + Ajuste de Preço */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                <span className="text-xs font-black uppercase text-slate-500 tracking-wider">
                   1. Tamanho da Marmita:
                 </span>
-                <span className="text-xs font-bold text-slate-500">
-                  {currentSizeConfig.label} selecionada
-                </span>
+                <button
+                  type="button"
+                  onClick={handleOpenPriceEditor}
+                  className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  <span>Ajustar Preços</span>
+                </button>
               </div>
 
               <div className="grid grid-cols-3 gap-2.5">
@@ -590,136 +750,134 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
                       R$ {s.price.toFixed(2).replace('.', ',')}
                     </span>
                     <span className="block text-[11px] text-slate-500 font-medium mt-1">
-                      {s.size === 'G' ? 'Até 2 carnes' : '1 carne inclusa'}
+                      {s.label.includes('P') ? 'Individual' : s.label.includes('M') ? 'Média tradicional' : 'Grande reforçada'}
                     </span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Step 2: Carnes do Dia (Cadastradas no Cardápio) */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                  2. Carne do Dia ({todayMenu?.dayLabel}):
-                </span>
-                <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full">
-                  {selectedProteinas.length} / {currentSizeConfig.maxProteins} inclusa{currentSizeConfig.maxProteins > 1 ? 's' : ''}
-                </span>
+            {/* 2. O Que Vai na Marmita (Composição e Descrição Manual) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3.5">
+              {/* Identificação / Prato */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                    <Utensils className="w-3.5 h-3.5 text-orange-600" />
+                    <span>2. O que é a Marmita? (Identificação / Nome do Prato):</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">Ex: Bife Acebolado, Marmita Comercial</span>
+                </div>
+                <input
+                  type="text"
+                  value={marmitaDishName}
+                  onChange={(e) => setMarmitaDishName(e.target.value)}
+                  placeholder="Ex: Bife Bovino Acebolado, Marmita Executiva, Filé de Frango Grelhado..."
+                  className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all"
+                />
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {todayMenu?.carnes.map((carneName, index) => {
-                  const isSelected = selectedProteinas.includes(carneName);
-                  return (
+              {/* Descrição Manual dos Itens */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                    <span>📝 O que vai na Marmita? (Descrição dos Itens):</span>
+                  </label>
+                  <span className="text-[11px] text-orange-600 font-bold">Escreva o que o cliente pediu</span>
+                </div>
+                <textarea
+                  rows={3}
+                  value={marmitaDescription}
+                  onChange={(e) => setMarmitaDescription(e.target.value)}
+                  placeholder="Escreva livremente o que vai na marmita...&#10;Ex: Arroz branco, feijão carioca, bife acebolado, batata frita e farofa."
+                  className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all resize-none"
+                />
+
+                {/* Atalhos rápidos com 1 clique */}
+                <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-bold text-slate-400 mr-1">Inserir rápido:</span>
+                  {[
+                    '+ Arroz Branco',
+                    '+ Arroz Integral',
+                    '+ Feijão Carioca',
+                    '+ Feijão Preto',
+                    '+ Bife',
+                    '+ Frango',
+                    '+ Linguiça',
+                    '+ Farofa',
+                    '+ Batata Frita',
+                    '+ Salada',
+                    '+ Macarrão',
+                    '+ Purê',
+                    '+ Vinagrete'
+                  ].map((itemText) => (
                     <button
-                      key={index}
+                      key={itemText}
                       type="button"
-                      onClick={() => handleToggleProtein(carneName)}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                        isSelected
-                          ? 'border-orange-500 bg-orange-600 text-white font-black shadow-sm'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-800 font-bold'
-                      }`}
+                      onClick={() => {
+                        const cleanText = itemText.replace('+', '').trim();
+                        setMarmitaDescription((prev) => {
+                          const trimmed = prev.trim();
+                          if (!trimmed) return cleanText;
+                          return `${trimmed}, ${cleanText}`;
+                        });
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-orange-100 hover:text-orange-900 text-slate-700 text-[11px] font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
                     >
-                      <span className="text-xs truncate">{carneName}</span>
-                      {isSelected && <Check className="w-4 h-4 shrink-0 ml-1" />}
+                      {itemText}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Step 3: Base Padrão (Arroz + Feijão) */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
-              <span className="text-xs font-black uppercase text-slate-400 tracking-wider block">
-                3. Arroz & Feijão (Padrão Completo):
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedBases(['Arroz Branco'])}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    selectedBases.includes('Arroz Branco')
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-slate-50 text-slate-700 border-slate-200'
-                  }`}
-                >
-                  🍚 Arroz Branco
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBases(['Arroz Integral'])}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    selectedBases.includes('Arroz Integral')
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-slate-50 text-slate-700 border-slate-200'
-                  }`}
-                >
-                  🍚 Arroz Integral
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedFeijoes(['Feijão Carioca'])}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    selectedFeijoes.includes('Feijão Carioca')
-                      ? 'bg-amber-900 text-white border-amber-900'
-                      : 'bg-slate-50 text-slate-700 border-slate-200'
-                  }`}
-                >
-                  🍲 Feijão Carioca
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedFeijoes(['Feijão Preto'])}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    selectedFeijoes.includes('Feijão Preto')
-                      ? 'bg-amber-900 text-white border-amber-900'
-                      : 'bg-slate-50 text-slate-700 border-slate-200'
-                  }`}
-                >
-                  🍲 Feijão Preto
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedFeijoes([])}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    selectedFeijoes.length === 0
-                      ? 'bg-red-600 text-white border-red-600'
-                      : 'bg-slate-50 text-slate-500 border-slate-200'
-                  }`}
-                >
-                  🚫 Sem Feijão
-                </button>
-              </div>
-            </div>
-
-            {/* Step 4: Acompanhamentos do Dia */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
-              <span className="text-xs font-black uppercase text-slate-400 tracking-wider block">
-                4. Acompanhamentos Cadastrados para Hoje:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {todayMenu?.acompanhamentos.map((sideName, index) => {
-                  const isSelected = selectedSides.includes(sideName);
-                  return (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => handleToggleSide(sideName)}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1.5 ${
-                        isSelected
-                          ? 'bg-orange-50 border-orange-500 text-orange-950 font-black'
-                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      {isSelected ? <Check className="w-3.5 h-3.5 text-orange-600" /> : <Plus className="w-3.5 h-3.5 text-slate-400" />}
-                      <span>{sideName}</span>
-                    </button>
-                  );
-                })}
+              {/* Se é sem alguma coisa */}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase text-rose-700 tracking-wider flex items-center gap-1">
+                    <span>🚫 É sem alguma coisa? (Retirar ingredientes):</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400">Clique para marcar</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Sem Cebola',
+                    'Sem Feijão',
+                    'Sem Salada',
+                    'Sem Farofa',
+                    'Sem Pimenta',
+                    'Sem Alho',
+                    'Sem Molho',
+                    'Sem Cheiro-Verde',
+                    'Sem Vinagrete',
+                    'Sem Tomate'
+                  ].map((tag) => {
+                    const isSelected = withoutTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleToggleWithoutTag(tag)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3" />}
+                        <span>{tag}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="pt-1">
+                  <input
+                    type="text"
+                    value={customWithout}
+                    onChange={(e) => setCustomWithout(e.target.value)}
+                    placeholder="Outra coisa a retirar? (Ex: sem vinagrete, sem sal)..."
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-400 focus:bg-white"
+                  />
+                </div>
               </div>
             </div>
 
@@ -730,7 +888,7 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
                   type="text"
                   value={marmitaNotes}
                   onChange={(e) => setMarmitaNotes(e.target.value)}
-                  placeholder="Observação da marmita (Ex: 'Feijão por cima', 'Pouco arroz')..."
+                  placeholder="Observação da marmita (Ex: 'Feijão por cima', 'Pouco arroz', 'Molho à parte')..."
                   className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-400"
                 />
               </div>
@@ -783,28 +941,55 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
               {cartItems.length === 0 ? (
                 <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <p className="text-xs font-bold text-slate-500">Nenhuma marmita no carrinho</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Clique em "+ Adicionar" ou "Confirmar Pedido"</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Monte acima e clique em "+ Adicionar" ou "Confirmar Pedido"</p>
                 </div>
               ) : (
                 cartItems.map((item, idx) => (
                   <div key={item.id} className="bg-orange-50/70 p-2.5 rounded-xl border border-orange-200 text-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-black text-slate-900 block">
-                        {item.quantity}x {item.sizeName} — R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
-                      </span>
-                      <span className="text-[11px] text-slate-600 block">
-                        🥩 {item.proteinas.join(', ')}
-                      </span>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-black text-slate-900">
+                          {item.quantity}x {item.sizeName}
+                        </span>
+                        {item.dishName && (
+                          <span className="text-[11px] font-black text-orange-950 bg-orange-200/90 px-2 py-0.5 rounded-md">
+                            🍲 {item.dishName}
+                          </span>
+                        )}
+                        <span className="text-slate-500 font-bold">
+                          — R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                      {item.without && item.without.length > 0 && (
+                        <div className="bg-rose-100 border border-rose-300 text-rose-800 text-[11px] font-black px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                          <span>🚫 SEM: {item.without.join(', ')}</span>
+                        </div>
+                      )}
+                      {item.description && (
+                        <span className="text-[11px] text-slate-700 font-medium block">
+                          📝 {item.description}
+                        </span>
+                      )}
+                      {!item.description && item.proteinas.length > 0 && (
+                        <span className="text-[11px] text-slate-600 block">
+                          🥩 {item.proteinas.join(', ')}
+                        </span>
+                      )}
                       {item.guarnicoes.length > 0 && (
                         <span className="text-[10px] text-slate-500 block truncate max-w-[200px]">
                           + {item.guarnicoes.join(', ')}
+                        </span>
+                      )}
+                      {item.notes && (
+                        <span className="text-[10px] text-amber-700 bg-amber-100/60 px-1.5 py-0.5 rounded block max-w-[220px] truncate">
+                          Obs: {item.notes}
                         </span>
                       )}
                     </div>
                     <button
                       type="button"
                       onClick={() => setCartItems((prev) => prev.filter((_, i) => i !== idx))}
-                      className="text-slate-400 hover:text-red-500 p-1 cursor-pointer"
+                      className="text-slate-400 hover:text-red-500 p-1 cursor-pointer shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -821,7 +1006,18 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
                   type="text"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Ex: João / Mesa 04"
+                  placeholder="Ex: João / Mesa 04 / Balcão"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Telefone WhatsApp (Opcional):</label>
+                <input
+                  type="text"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="(67) 99999-9999"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
                 />
               </div>
@@ -852,7 +1048,7 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
                     type="text"
                     value={addressOrTable}
                     onChange={(e) => setAddressOrTable(e.target.value)}
-                    placeholder="Rua, número e bairro..."
+                    placeholder="Rua, número e bairro de entrega..."
                     className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-amber-300 text-xs"
                   />
                   <div className="flex items-center justify-between text-xs font-bold text-amber-900">
@@ -997,13 +1193,33 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
 
                     <div className="bg-slate-50 p-2.5 rounded-xl space-y-1 text-xs">
                       {order.items.map((item, idx) => (
-                        <div key={idx} className="border-b border-slate-200/60 pb-1 last:border-0 last:pb-0">
-                          <span className="font-black text-slate-800">
-                            {item.quantity}x Marmita {item.sizeName}
-                          </span>
-                          <p className="text-[11px] text-slate-600">
-                            🥩 {item.proteinas.join(', ')}
-                          </p>
+                        <div key={idx} className="border-b border-slate-200/60 pb-1.5 last:border-0 last:pb-0">
+                          <div className="flex items-center justify-between gap-1 flex-wrap">
+                            <span className="font-black text-slate-800 text-sm">
+                              {item.quantity}x Marmita {item.sizeName}
+                            </span>
+                            {item.dishName && (
+                              <span className="text-xs font-black text-orange-900 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-lg">
+                                🍲 {item.dishName}
+                              </span>
+                            )}
+                          </div>
+                          {item.without && item.without.length > 0 && (
+                            <div className="bg-rose-100 border border-rose-300 text-rose-900 text-xs font-black px-2 py-1 rounded-md mt-1 flex items-center gap-1 shadow-xs">
+                              <span>⚠️ ATENÇÃO: SEM {item.without.join(' • ')}</span>
+                            </div>
+                          )}
+                          {item.description ? (
+                            <p className="text-xs text-slate-800 font-medium mt-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                              📝 <strong>Vai na marmita:</strong> {item.description}
+                            </p>
+                          ) : (
+                            item.proteinas.length > 0 && (
+                              <p className="text-[11px] text-slate-600 mt-0.5">
+                                🥩 {item.proteinas.join(', ')}
+                              </p>
+                            )
+                          )}
                           {item.guarnicoes.length > 0 && (
                             <p className="text-[10px] text-slate-500 truncate">
                               + {item.guarnicoes.join(', ')}
@@ -1073,190 +1289,318 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
       )}
 
       {/* =====================================================================
-       * TAB 3: CAMPO PARA CADASTRAR O CARDÁPIO DE CADA DIA & PREÇOS
+       * TAB 3: CADASTRAR / ALTERAR PREÇO DAS MARMITAS (SOMENTE TAMANHO E PREÇO)
        * ===================================================================== */}
-      {activeTab === 'cardapio_dia' && (
-        <div className="space-y-5">
-          {/* Preços dos 3 Tamanhos (Pequena, Média e Grande) */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <div>
-              <h3 className="font-black text-slate-900 text-base">Valores das Marmitas</h3>
-              <p className="text-xs text-slate-500">Defina os preços dos 3 tamanhos oficiais do sistema:</p>
+      {activeTab === 'precos' && (
+        <div className="space-y-5 max-w-4xl mx-auto">
+          {/* Card: Cadastrar / Atualizar Preço (Apenas Tamanho e Preço) */}
+          <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-sm space-y-5">
+            <div className="flex items-center space-x-3.5 pb-4 border-b border-slate-100">
+              <div className="w-11 h-11 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-bold shadow-md shadow-orange-600/20">
+                <DollarSign className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  Cadastrar Preço da Marmita
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Preencha apenas o tamanho e o preço. O valor é atualizado automaticamente no PDV e na comanda.
+                </p>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {cleanSizes.map((s) => (
-                <div key={s.size} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-sm text-slate-900">{s.label}</span>
-                    <span className="text-[11px] font-bold text-slate-400">
-                      {s.size === 'G' ? '2 carnes' : '1 carne'}
-                    </span>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const priceNum = parseFloat(registerPriceInput.replace(',', '.'));
+                handleSaveRegisteredPrice(registerSizeName, priceNum);
+              }}
+              className="space-y-5"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {/* 1. Tamanho da Marmita */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                    1. Tamanho da Marmita
+                  </label>
+                  
+                  {/* Botões Rápidos */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {['Pequena (P)', 'Média (M)', 'Grande (G)'].map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setRegisterSizeName(opt);
+                          const isP = opt.includes('(P)');
+                          const isM = opt.includes('(M)');
+                          const isG = opt.includes('(G)');
+                          const match = cleanSizes.find(
+                            (s) => (isP && s.size === 'P') || (isM && s.size === 'M') || (isG && s.size === 'G') || s.label === opt
+                          );
+                          if (match) {
+                            setRegisterPriceInput(match.price.toFixed(2));
+                          }
+                        }}
+                        className={`py-2.5 px-2 text-xs font-black rounded-xl border text-center transition-all cursor-pointer ${
+                          registerSizeName === opt
+                            ? 'bg-orange-600 text-white border-orange-600 shadow-md ring-2 ring-orange-600/20'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
                   </div>
 
+                  {/* Campo de Texto para outro tamanho */}
+                  <input
+                    type="text"
+                    placeholder="Ou digite outro tamanho (ex: Marmita Família, Mini...)"
+                    value={registerSizeName}
+                    onChange={(e) => setRegisterSizeName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    required
+                  />
+                  <span className="block text-[11px] text-slate-400">
+                    Escolha um dos botões ou digite um nome de tamanho personalizado.
+                  </span>
+                </div>
+
+                {/* 2. Preço de Venda */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                    2. Preço (R$)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-base">
+                      R$
+                    </span>
+                    <input
+                      type="number"
+                      step="0.50"
+                      min="0.50"
+                      placeholder="0,00"
+                      value={registerPriceInput}
+                      onChange={(e) => setRegisterPriceInput(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xl font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                      required
+                    />
+                  </div>
+                  <span className="block text-[11px] text-slate-400">
+                    Exemplo: 16.00 (Pequena), 20.00 (Média), 25.00 (Grande).
+                  </span>
+                </div>
+              </div>
+
+              {/* Botão de Gravação */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Sem complicações: cadastra e salva direto.</span>
+                </p>
+
+                <button
+                  type="submit"
+                  className="w-full sm:w-auto px-7 py-3 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-black text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Preço</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Cards / Tabela de Preços Ativos */}
+          <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+              <div>
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                  Tabela de Preços Atuais
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Preços vigentes para cada tamanho de marmita no sistema
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetDefaultPrices}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                >
+                  Restaurar Padrão
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              {cleanSizes.map((s) => {
+                const isCustom = s.size !== 'P' && s.size !== 'M' && s.size !== 'G';
+                const currentInlineVal = inlinePriceInputs[s.label] ?? s.price;
+
+                return (
+                  <div
+                    key={s.size + s.label}
+                    className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-orange-300 transition-all flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-sm font-black text-slate-900 block">
+                          {s.label}
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          {s.description || 'Marmita Marmitaria'}
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-700">
+                        {s.size}
+                      </span>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-slate-400">
+                          Preço Atual
+                        </span>
+                        <span className="text-xl font-black text-orange-600">
+                          R$ {s.price.toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+
+                      {/* Ajuste rápido inline de preço */}
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <span className="text-xs font-bold text-slate-400">R$</span>
+                        <input
+                          type="number"
+                          step="0.50"
+                          min="0.50"
+                          value={currentInlineVal}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setInlinePriceInputs((prev) => ({
+                              ...prev,
+                              [s.label]: val
+                            }));
+                          }}
+                          className="flex-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = inlinePriceInputs[s.label] ?? s.price;
+                            handleSaveInlinePrice(s.label, val);
+                          }}
+                          className="px-2.5 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs"
+                          title="Salvar novo preço para este tamanho"
+                        >
+                          Salvar
+                        </button>
+                        {isCustom && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSize(s.label)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition cursor-pointer"
+                            title="Excluir tamanho"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Quick Action Button to go back to PDV */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Os preços cadastrados atualizam os botões do PDV de montagem automaticamente.
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveTab('novo_pedido')}
+                className="inline-flex items-center space-x-1.5 text-xs font-black text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+              >
+                <span>Ir para Montagem de Marmitas (PDV)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isEditingPrices && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 flex items-center justify-center p-3 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-5 border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm">Ajustar Preços das Marmitas</h3>
+                  <p className="text-[11px] text-slate-400">Valores cobrados nos 3 tamanhos</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingPrices(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-bold text-xs flex items-center justify-center hover:bg-slate-200 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {cleanSizes.map((s) => (
+                <div key={s.size} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Preço (R$):</label>
+                    <span className="font-black text-sm text-slate-900 block">{s.label}</span>
+                    <span className="text-[11px] text-slate-500">{s.description}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-bold text-slate-400">R$</span>
                     <input
                       type="number"
                       step="0.5"
-                      value={s.price}
+                      min="1"
+                      value={tempPrices[s.size] !== undefined ? tempPrices[s.size] : s.price}
                       onChange={(e) => {
-                        const newPrice = Number(e.target.value);
-                        const updated = cleanSizes.map((item) =>
-                          item.size === s.size ? { ...item, price: newPrice } : item
-                        );
-                        onUpdateSizes(updated);
+                        const val = Number(e.target.value);
+                        setTempPrices((prev) => ({ ...prev, [s.size]: val }));
                       }}
-                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm font-black text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      className="w-20 px-2.5 py-1.5 rounded-xl bg-white border border-slate-300 font-black text-sm text-orange-600 text-right focus:outline-none focus:ring-2 focus:ring-orange-400"
                     />
                   </div>
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* Cadastro de Cardápio de Cada Dia da Semana */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
-                  <span>📅 Cadastrar Cardápio de Cada Dia</span>
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Cadastre as carnes e acompanhamentos servidos em cada dia da semana.
-                </p>
-              </div>
-
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => handleCopyWhatsAppMenu(activeMenu)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
+                onClick={() => setIsEditingPrices(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
               >
-                <Share2 className="w-4 h-4" />
-                <span>Copiar Cardápio p/ WhatsApp</span>
+                Cancelar
               </button>
-            </div>
-
-            {/* Day Selector Buttons */}
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 p-1.5 bg-slate-100 rounded-xl">
-              {weekDays.map((d) => {
-                const isSelected = selectedDayKey === d.key;
-                const isToday = todayKey === d.key;
-                return (
-                  <button
-                    key={d.key}
-                    type="button"
-                    onClick={() => setSelectedDayKey(d.key)}
-                    className={`py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer relative ${
-                      isSelected
-                        ? 'bg-orange-600 text-white shadow-xs font-black'
-                        : 'bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{d.short}</span>
-                    {isToday && (
-                      <span className="block text-[9px] uppercase tracking-wider font-black opacity-90">
-                        HOJE
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Editing Card for Selected Day */}
-            <div className="bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-                <span className="font-black text-slate-900 text-sm flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-orange-600" />
-                  <span>Cardápio de: <strong className="text-orange-600">{activeMenu?.dayLabel}</strong></span>
-                </span>
-                {todayKey === selectedDayKey && (
-                  <span className="bg-emerald-100 text-emerald-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">
-                    Ativo Hoje no PDV
-                  </span>
-                )}
-              </div>
-
-              {/* Carnes do Dia Field */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-black text-slate-800">
-                  🥩 Carnes / Pratos Principais do Dia (separados por vírgula):
-                </label>
-                <textarea
-                  rows={2}
-                  value={editCarnes}
-                  onChange={(e) => setEditCarnes(e.target.value)}
-                  placeholder="Ex: Bife Acebolado, Filé de Frango Grelhado, Feijoada Completa, Costelinha Suína"
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
-                />
-                <p className="text-[11px] text-slate-400">
-                  Estas carnes aparecerão como opções clicáveis na tela de montagem da marmita.
-                </p>
-              </div>
-
-              {/* Acompanhamentos do Dia Field */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-black text-slate-800">
-                  🥗 Acompanhamentos & Guarnições do Dia (separados por vírgula):
-                </label>
-                <textarea
-                  rows={2}
-                  value={editAcompanhamentos}
-                  onChange={(e) => setEditAcompanhamentos(e.target.value)}
-                  placeholder="Ex: Arroz Branco, Feijão Carioca, Farofa da Casa, Macarrão, Vinagrete, Purê de Batatas"
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
-                />
-              </div>
-
-              {/* Destaque & Observações */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-bold text-slate-700">
-                    ⭐ Destaque do Prato Especial (Opcional):
-                  </label>
-                  <input
-                    type="text"
-                    value={editDestaque}
-                    onChange={(e) => setEditDestaque(e.target.value)}
-                    placeholder="Ex: Feijoada Completa com Couve e Torresmo"
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-bold text-slate-700">
-                    📝 Observações / Recado no WhatsApp:
-                  </label>
-                  <input
-                    type="text"
-                    value={editObservacoes}
-                    onChange={(e) => setEditObservacoes(e.target.value)}
-                    placeholder="Ex: Acompanha vinagrete e farofa crocante"
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  />
-                </div>
-              </div>
-
-              {/* Save Button */}
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSaveDayMenu}
-                  className="bg-orange-600 hover:bg-orange-500 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md transition-all flex items-center space-x-1.5 cursor-pointer active:scale-95"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Salvar Cardápio de {activeMenu?.dayLabel}</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleSavePrices}
+                className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-black shadow-md transition cursor-pointer"
+              >
+                Salvar Preços
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Print Thermal Modal */}
+      {/* =====================================================================
+       * MODAL: IMPRESSÃO TÉRMICA DE COMANDA / ETIQUETA
+       * ===================================================================== */}
       {printOrderModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 flex items-center justify-center p-3">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 flex items-center justify-center p-3 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-4 border border-slate-200 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-black text-slate-900 text-sm">
@@ -1265,32 +1609,30 @@ export const MarmitariaTab: React.FC<MarmitariaTabProps> = ({
               <button
                 type="button"
                 onClick={() => setPrintOrderModal(null)}
-                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-black text-xs flex items-center justify-center cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-black text-xs flex items-center justify-center cursor-pointer hover:bg-slate-200"
               >
                 ✕
               </button>
             </div>
-
             <p className="text-xs text-slate-600">
               Cliente: <strong>{printOrderModal.customerName}</strong> • Total: <strong>R$ {printOrderModal.total.toFixed(2).replace('.', ',')}</strong>
             </p>
-
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handlePrint}
                 disabled={isPrintingLabel}
-                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl font-black text-xs flex items-center justify-center space-x-1.5 cursor-pointer"
+                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl font-black text-xs flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm active:scale-95"
               >
                 <Printer className="w-4 h-4" />
                 <span>{isPrintingLabel ? 'Imprimindo...' : 'Imprimir Térmica'}</span>
               </button>
-
               {printOrderModal.customerPhone && (
                 <button
                   type="button"
                   onClick={handleShareWhatsApp}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2.5 rounded-xl font-black text-xs flex items-center justify-center space-x-1 cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2.5 rounded-xl font-black text-xs flex items-center justify-center space-x-1 cursor-pointer active:scale-95"
+                  title="Enviar mensagem no WhatsApp"
                 >
                   <Send className="w-4 h-4" />
                   <span>WhatsApp</span>

@@ -3,7 +3,7 @@ import {
   TabType, Product, StockItem, Order, CashShift, OrderStatus, MeatPoint, PaymentMethod, PaymentSplit, OrderItem, AppUser,
   SystemLog, LogCategory, LogActionType, hasPermission, getTabRequiredPermission, getTabTitle, getDefaultTabForUser,
   SystemModule, MarmitaOrder, MarmitaOrderStatus, MarmitaSizeConfig, MarmitaOption, MarmitaSettings,
-  canUserManagePhotos, ReceiptType
+  canUserManagePhotos, ReceiptType, PrintJob
 } from './types';
 import { 
   loadProducts, saveProducts, 
@@ -23,8 +23,11 @@ import {
   fetchProductsFromApi, fetchOrdersFromApi, fetchStockFromApi, fetchCashShiftFromApi, fetchUsersFromApi,
   fetchLogsFromApi, syncLogToApi, clearLogsFromApi,
   syncOrderToApi, syncProductToApi, syncStockToApi, deleteStockFromApi, syncCashShiftToApi,
-  syncUserToApi, deleteUserFromApi, deleteProductFromApi, deleteOrderFromApi
+  syncUserToApi, deleteUserFromApi, deleteProductFromApi, deleteOrderFromApi,
+  fetchPendingPrintJobs, markPrintJobAsPrinted, fetchPrintQueueHistory
 } from './lib/storage';
+import { printReceiptDirect, getReceiptSettings } from './utils/printReceipt';
+import { playOrderAlertChime } from './utils/audioAlert';
 
 import { LoginScreen } from './components/LoginScreen';
 import { Navbar } from './components/Navbar';
@@ -35,12 +38,14 @@ import { RelatoriosTab } from './components/RelatoriosTab';
 import { UsuariosTab } from './components/UsuariosTab';
 import { AuditoriaTab } from './components/AuditoriaTab';
 import { MarmitariaTab } from './components/MarmitariaTab';
+import { MesasTab } from './components/MesasTab';
 import { ModuleSelectModal } from './components/ModuleSelectModal';
 import { StartupScreen } from './components/StartupScreen';
 import { ReceiptModal } from './components/ReceiptModal';
 import { AccessDeniedView } from './components/AccessDeniedView';
 import { CustomerMenu } from './components/CustomerMenu';
 import { LogoModal } from './components/LogoModal';
+import { UsbPrintStationModal } from './components/UsbPrintStationModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('caixa');
@@ -100,6 +105,35 @@ export default function App() {
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptInitialType, setReceiptInitialType] = useState<ReceiptType>('etiqueta_mesa');
 
+  // USB Printer Station (Computer Bridge)
+  const [isUsbModalOpen, setIsUsbModalOpen] = useState(false);
+  const [isAutoPrintEnabled, setIsAutoPrintEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('espetinho_usb_autoprint') !== 'false';
+  });
+  const [isSoundEnabled, setIsSoundEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('espetinho_usb_sound') !== 'false';
+  });
+  const [recentPrintJobs, setRecentPrintJobs] = useState<PrintJob[]>([]);
+  const [printStationBanner, setPrintStationBanner] = useState<string | null>(null);
+
+  const handleToggleAutoPrint = (enabled: boolean) => {
+    setIsAutoPrintEnabled(enabled);
+    localStorage.setItem('espetinho_usb_autoprint', enabled ? 'true' : 'false');
+  };
+
+  const handleToggleSound = (enabled: boolean) => {
+    setIsSoundEnabled(enabled);
+    localStorage.setItem('espetinho_usb_sound', enabled ? 'true' : 'false');
+  };
+
+  const handleRefreshPrintJobs = () => {
+    fetchPrintQueueHistory().then((jobs) => {
+      if (jobs && Array.isArray(jobs)) setRecentPrintJobs(jobs);
+    });
+  };
+
   const handleOpenReceiptModal = (order: Order, type?: ReceiptType) => {
     setReceiptInitialType(type || (order.isPaid ? 'cliente' : 'etiqueta_mesa'));
     setReceiptOrder(order);
@@ -156,6 +190,47 @@ export default function App() {
     }, 4000);
     return () => clearInterval(pollInterval);
   }, []);
+
+  // Background listener: Automatically print orders placed via mobile phone to the USB printer on this computer
+  useEffect(() => {
+    handleRefreshPrintJobs();
+
+    const printInterval = setInterval(async () => {
+      if (!isAutoPrintEnabled) return;
+
+      try {
+        const pendingJobs = await fetchPendingPrintJobs();
+        if (pendingJobs && pendingJobs.length > 0) {
+          for (const job of pendingJobs) {
+            // Play audible chime if enabled
+            if (isSoundEnabled) {
+              playOrderAlertChime();
+            }
+
+            // Display alert banner on computer
+            setPrintStationBanner(`🖨️ Pedido #${job.orderNumber} (${job.tableName}) recebido do celular! Imprimindo etiqueta 58mm...`);
+            setTimeout(() => setPrintStationBanner(null), 5000);
+
+            // Trigger thermal 58mm printing
+            try {
+              const settings = getReceiptSettings();
+              await printReceiptDirect(job.order, settings, job.type || 'etiqueta_mesa', '58mm');
+            } catch (err) {
+              console.warn('Erro ao disparar impressão direta:', err);
+            }
+
+            // Mark job as printed on server
+            await markPrintJobAsPrinted(job.id);
+          }
+          handleRefreshPrintJobs();
+        }
+      } catch (err) {
+        // Silent poll error
+      }
+    }, 2500);
+
+    return () => clearInterval(printInterval);
+  }, [isAutoPrintEnabled, isSoundEnabled]);
 
   // Sync state changes with localStorage
   useEffect(() => {
@@ -546,6 +621,25 @@ export default function App() {
         newValue: `R$ ${updatedProduct.price.toFixed(2).replace('.', ',')}`,
         available: updatedProduct.isAvailable,
       }
+    );
+  };
+
+  const handleUpdateOrderItems = (orderId: string, items: OrderItem[], newTotal: number) => {
+    setOrders((prev) =>
+      prev.map((ord) => {
+        if (ord.id === orderId) {
+          const updated = {
+            ...ord,
+            items,
+            subtotal: newTotal,
+            total: newTotal,
+            updatedAt: new Date().toISOString()
+          };
+          syncOrderToApi(updated);
+          return updated;
+        }
+        return ord;
+      })
     );
   };
 
@@ -1270,7 +1364,31 @@ export default function App() {
         onOpenModuleSelectModal={() => setShowStartupScreen(true)}
         logo={logo}
         onOpenLogoModal={isAdminUser ? () => setIsLogoModalOpen(true) : undefined}
+        onOpenUsbPrintStation={() => {
+          handleRefreshPrintJobs();
+          setIsUsbModalOpen(true);
+        }}
+        isUsbPrintingActive={isAutoPrintEnabled}
       />
+
+      {/* Floating Alert: Auto-printed mobile order notification banner */}
+      {printStationBanner && (
+        <div className="fixed top-20 right-4 z-50 bg-slate-900 text-white border-2 border-emerald-500 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <span className="text-lg">🖨️</span>
+          </div>
+          <div>
+            <p className="text-xs font-black text-white">{printStationBanner}</p>
+            <p className="text-[10px] text-emerald-300">Etiqueta 58mm impressa via USB do computador</p>
+          </div>
+          <button
+            onClick={() => setPrintStationBanner(null)}
+            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white cursor-pointer ml-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-20 sm:pb-8">
@@ -1323,6 +1441,19 @@ export default function App() {
                     handleSelectModule('espetos');
                     setActiveTab('caixa');
                   }}
+                />
+              )}
+
+              {/* Tab 0: Mapa de Mesas & Atendimento */}
+              {activeTab === 'mesas' && (
+                <MesasTab
+                  orders={orders}
+                  products={products}
+                  currentUser={currentUser}
+                  onCreateOrder={handleCreateOrder}
+                  onUpdateOrderItems={handleUpdateOrderItems}
+                  onPrintReceipt={(ord, type) => handleOpenReceiptModal(ord, type)}
+                  onGoToCaixa={() => setActiveTab('caixa')}
                 />
               )}
 
@@ -1475,6 +1606,18 @@ export default function App() {
           onSaveLogo={handleSaveLogo}
         />
       )}
+
+      {/* USB Thermal Printer Station Modal (Computer Bridge) */}
+      <UsbPrintStationModal
+        isOpen={isUsbModalOpen}
+        onClose={() => setIsUsbModalOpen(false)}
+        isAutoPrintEnabled={isAutoPrintEnabled}
+        onToggleAutoPrint={handleToggleAutoPrint}
+        isSoundEnabled={isSoundEnabled}
+        onToggleSound={handleToggleSound}
+        recentJobs={recentPrintJobs}
+        onRefreshJobs={handleRefreshPrintJobs}
+      />
     </div>
   );
 }

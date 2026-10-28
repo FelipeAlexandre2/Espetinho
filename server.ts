@@ -27,6 +27,7 @@ async function startServer() {
   let memoryCashShift = { ...INITIAL_CASH_SHIFT };
   let memoryUsers = [...INITIAL_USERS];
   let memoryLogs = [...INITIAL_LOGS];
+  let memoryPrintQueue: any[] = [];
 
   // Helper to check DB readiness and seed initial data if empty
   async function seedIfEmpty() {
@@ -495,6 +496,32 @@ async function startServer() {
         console.error('Failed to save order in db', e);
       }
     }
+
+    // Auto-enqueue print job for USB printer on computer
+    if (Array.isArray(order.items) && order.items.length > 0 && req.body.autoPrint !== false) {
+      const isMobile = req.body.source === 'celular' || (req.headers['user-agent']?.toLowerCase().includes('mobile'));
+      const source = req.body.source || (isMobile ? 'celular' : 'terminal');
+      const alreadyQueued = memoryPrintQueue.some((j) => j.orderId === order.id && Date.now() - new Date(j.createdAt).getTime() < 4000);
+      
+      if (!alreadyQueued) {
+        const printJob = {
+          id: `print-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          tableName: order.tableOrCustomer || 'Mesa',
+          type: 'etiqueta_mesa',
+          order,
+          printed: false,
+          createdAt: new Date().toISOString(),
+          source,
+        };
+        memoryPrintQueue.unshift(printJob);
+        if (memoryPrintQueue.length > 200) {
+          memoryPrintQueue = memoryPrintQueue.slice(0, 200);
+        }
+      }
+    }
+
     res.json(order);
   });
 
@@ -518,6 +545,28 @@ async function startServer() {
         console.error('Failed to update order in db', e);
       }
     }
+
+    // Auto-enqueue for updated items if requested
+    if (req.body.enqueuePrintJob && Array.isArray(order.items) && order.items.length > 0) {
+      const isMobile = req.body.source === 'celular' || (req.headers['user-agent']?.toLowerCase().includes('mobile'));
+      const source = req.body.source || (isMobile ? 'celular' : 'terminal');
+      const printJob = {
+        id: `print-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        tableName: order.tableOrCustomer || 'Mesa',
+        type: 'etiqueta_mesa',
+        order,
+        printed: false,
+        createdAt: new Date().toISOString(),
+        source,
+      };
+      memoryPrintQueue.unshift(printJob);
+      if (memoryPrintQueue.length > 200) {
+        memoryPrintQueue = memoryPrintQueue.slice(0, 200);
+      }
+    }
+
     res.json(memoryOrders.find((o) => o.id === id) || order);
   });
 
@@ -569,6 +618,69 @@ async function startServer() {
       }
     }
     res.json({ success: true, id });
+  });
+
+  // ================= PRINT QUEUE API (USB Thermal Printer Station) =================
+  app.get('/api/print-queue/pending', (req, res) => {
+    const pending = memoryPrintQueue.filter((j) => !j.printed);
+    res.json(pending);
+  });
+
+  app.get('/api/print-queue', (req, res) => {
+    res.json(memoryPrintQueue.slice(0, 50));
+  });
+
+  app.post('/api/print-queue', (req, res) => {
+    const { order, type = 'etiqueta_mesa', source = 'celular' } = req.body;
+    if (!order) {
+      return res.status(400).json({ error: 'Dados do pedido são obrigatórios' });
+    }
+
+    const job = {
+      id: `print-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      orderId: order.id || `ord-${Date.now()}`,
+      orderNumber: order.orderNumber || 0,
+      tableName: order.tableOrCustomer || 'Mesa',
+      type,
+      order,
+      printed: false,
+      createdAt: new Date().toISOString(),
+      source: source || 'celular',
+    };
+
+    memoryPrintQueue.unshift(job);
+    if (memoryPrintQueue.length > 200) {
+      memoryPrintQueue = memoryPrintQueue.slice(0, 200);
+    }
+
+    res.status(201).json(job);
+  });
+
+  app.post('/api/print-queue/:id/printed', (req, res) => {
+    const { id } = req.params;
+    const job = memoryPrintQueue.find((j) => j.id === id);
+    if (job) {
+      job.printed = true;
+      job.printedAt = new Date().toISOString();
+      return res.json({ success: true, job });
+    }
+    res.status(404).json({ error: 'Job de impressão não encontrado' });
+  });
+
+  app.post('/api/print-queue/:id/reprint', (req, res) => {
+    const { id } = req.params;
+    const job = memoryPrintQueue.find((j) => j.id === id);
+    if (job) {
+      job.printed = false;
+      delete job.printedAt;
+      return res.json({ success: true, job });
+    }
+    res.status(404).json({ error: 'Job de impressão não encontrado' });
+  });
+
+  app.delete('/api/print-queue', (req, res) => {
+    memoryPrintQueue = [];
+    res.json({ success: true, message: 'Fila de impressão limpa' });
   });
 
   // ================= STOCK API =================

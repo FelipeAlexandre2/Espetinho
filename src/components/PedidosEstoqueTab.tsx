@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Order, StockItem, OrderStatus, MeatPoint, Product, PaymentMethod, OrderItem, AppUser, hasPermission, canUserCreateOrder, TABLES } from '../types';
 import { INITIAL_PRODUCTS } from '../data/mockData';
 import { isSkewerItem } from '../utils/printReceipt';
+import { isBeverageProduct, isSkewerOrMeatProduct } from '../utils/productUtils';
 import { 
   ClipboardList, Package, Search, Filter, Printer, CheckCircle2, 
   Flame, Clock, AlertTriangle, Plus, Minus, ArrowDownRight, ArrowUpRight, 
@@ -210,7 +211,9 @@ export const PedidosEstoqueTab: React.FC<PedidosEstoqueTabProps> = ({
 
   // Order Item Handlers for New Order Modal
   const handleSelectProductForNewOrder = (product: Product) => {
-    if (product.requiresMeatPoint) {
+    const isDrink = isBeverageProduct(product);
+    const isSkewer = !isDrink && (isSkewerOrMeatProduct(product) || product.requiresMeatPoint);
+    if (isSkewer) {
       setSelectedProdForMeat(product);
       setSelectedMeatPoint('ao_ponto');
     } else {

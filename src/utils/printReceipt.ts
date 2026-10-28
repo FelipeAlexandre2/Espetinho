@@ -9,7 +9,7 @@ export function getReceiptSettings(): ReceiptSettings {
   try {
     const raw = localStorage.getItem(RECEIPT_SETTINGS_STORAGE_KEY);
     if (raw) {
-      return { ...DEFAULT_RECEIPT_SETTINGS, ...JSON.parse(raw) };
+      return { ...DEFAULT_RECEIPT_SETTINGS, ...JSON.parse(raw), defaultPaperWidth: '58mm' };
     }
   } catch (err) {
     console.error('Erro ao ler configurações de comprovante:', err);
@@ -58,7 +58,7 @@ export function generateReceiptHtml(
   order: Order,
   settings: ReceiptSettings = getReceiptSettings(),
   type: ReceiptType = 'cliente',
-  paperWidth: ReceiptPaperWidth = '80mm'
+  paperWidth: ReceiptPaperWidth = '58mm'
 ): string {
   const dateObj = new Date(order.createdAt);
   const formattedDate = dateObj.toLocaleDateString('pt-BR');
@@ -262,8 +262,8 @@ export function generateReceiptHtml(
       <div class="text-center">
         <div class="header-title">${settings.restaurantName || 'MARESIA'}</div>
         ${settings.subtitle ? `<div style="font-size: 11px;">${settings.subtitle}</div>` : ''}
-        <div class="badge" style="background: #000; color: #fff; font-size: 11px; padding: 3px 6px;">
-          🏷️ ETIQUETA DE MESA & ESPETOS
+        <div class="badge" style="background: #000; color: #fff; font-size: 11px; padding: 3px 6px; font-weight: 900;">
+          🏷️ ETIQUETA - COZINHA & CHURRASQUEIRA
         </div>
       </div>
 
@@ -499,7 +499,7 @@ export function printReceiptDirect(
   order: Order,
   settings: ReceiptSettings = getReceiptSettings(),
   type: ReceiptType = 'cliente',
-  paperWidth: ReceiptPaperWidth = '80mm'
+  paperWidth: ReceiptPaperWidth = '58mm'
 ): Promise<boolean> {
   return new Promise((resolve) => {
     try {
@@ -568,7 +568,7 @@ export function openReceiptInNewWindow(
   order: Order,
   settings: ReceiptSettings = getReceiptSettings(),
   type: ReceiptType = 'cliente',
-  paperWidth: ReceiptPaperWidth = '80mm'
+  paperWidth: ReceiptPaperWidth = '58mm'
 ): void {
   const html = generateReceiptHtml(order, settings, type, paperWidth);
   const printWindow = window.open('', '_blank');
@@ -715,7 +715,7 @@ export function formatReceiptRawText(
   order: Order,
   settings: ReceiptSettings = getReceiptSettings(),
   type: ReceiptType = 'cliente',
-  paperWidth: ReceiptPaperWidth = '80mm'
+  paperWidth: ReceiptPaperWidth = '58mm'
 ): string {
   const lineLength = paperWidth === '58mm' ? 32 : 42;
   const separator = '-'.repeat(lineLength);

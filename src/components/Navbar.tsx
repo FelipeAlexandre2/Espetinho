@@ -4,7 +4,7 @@ import {
   UtensilsCrossed, Utensils, ClipboardList, Flame, DollarSign, Lock, Unlock, 
   TrendingUp, Sparkles, Package, BarChart3, Users, UserCheck, Shield, History,
   LogOut, CheckCircle2, KeyRound, X, ChevronDown, ChefHat, RefreshCw, LayoutGrid,
-  Settings, ChevronRight
+  Settings, ChevronRight, Printer
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
@@ -26,6 +26,8 @@ interface NavbarProps {
   onOpenModuleSelectModal?: () => void;
   logo?: string;
   onOpenLogoModal?: () => void;
+  onOpenUsbPrintStation?: () => void;
+  isUsbPrintingActive?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,6 +48,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenModuleSelectModal,
   logo,
   onOpenLogoModal,
+  onOpenUsbPrintStation,
+  isUsbPrintingActive = true,
 }) => {
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -229,6 +233,25 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Quick Metrics, Cash Status, Logged User & Distinct POS Button */}
           <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
+            {/* USB Print Station Indicator (Desktop PC) */}
+            {onOpenUsbPrintStation && (
+              <button
+                id="navbar-btn-usb-printer"
+                type="button"
+                onClick={onOpenUsbPrintStation}
+                className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 ${
+                  isUsbPrintingActive
+                    ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/50'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+                }`}
+                title="Estação de Impressão USB (58mm) do Computador"
+              >
+                <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden md:inline">Impressora USB 58mm</span>
+                <span className={`w-2 h-2 rounded-full ${isUsbPrintingActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              </button>
+            )}
+
             {/* Logged in User Pill & Switch / Logout */}
             <div className="flex items-center space-x-1">
               <button

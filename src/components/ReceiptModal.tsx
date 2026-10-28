@@ -31,8 +31,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 }) => {
   if (!order) return null;
 
-  // Print format & profile states
-  const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>('80mm');
+  // Print format & profile states (Locked to 58mm per user request)
+  const [paperWidth] = useState<ReceiptPaperWidth>('58mm');
   const [receiptType, setReceiptType] = useState<ReceiptType>(initialType);
   const [fontSize, setFontSize] = useState<'normal' | 'grande'>('grande');
   const [settings, setSettings] = useState<ReceiptSettings>(getReceiptSettings);
@@ -44,9 +44,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   useEffect(() => {
     const loaded = getReceiptSettings();
     setSettings(loaded);
-    if (loaded.defaultPaperWidth) {
-      setPaperWidth(loaded.defaultPaperWidth);
-    }
   }, []);
 
   // Compute skewers and table items for the label
@@ -197,45 +194,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               </button>
             </div>
 
-            {/* Paper Width Selector */}
-            <div className="flex items-center gap-1 bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setPaperWidth('80mm')}
-                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer ${
-                  paperWidth === '80mm'
-                    ? 'bg-amber-500 text-slate-950 font-black'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Impressoras térmicas de balcão (Epson, Elgin, Bematech 80mm)"
-              >
-                80mm
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaperWidth('58mm')}
-                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                  paperWidth === '58mm'
-                    ? 'bg-amber-500 text-slate-950 font-black'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Mini impressoras térmicas Bluetooth portáteis (58mm)"
-              >
-                <Smartphone className="w-3 h-3" />
-                <span>58mm</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaperWidth('a4')}
-                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer ${
-                  paperWidth === 'a4'
-                    ? 'bg-amber-500 text-slate-950 font-black'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Impressoras convencionais A4"
-              >
-                A4
-              </button>
+            {/* Fixed Paper Width: 58mm (Sem seleção) */}
+            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs text-[11px] font-black text-slate-800">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Bobina: 58mm</span>
             </div>
 
             {/* Font Size Selector (High Legibility) */}
@@ -343,13 +305,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/60 flex items-center justify-center min-h-[300px]">
           
           <div 
-            className={`printable-receipt bg-white text-black shadow-xl border-2 border-black font-sans space-y-3 transition-all duration-200 rounded-xs ${
-              paperWidth === '58mm'
-                ? 'w-[290px] p-4 text-xs'
-                : paperWidth === '80mm'
-                ? 'w-[360px] p-5 text-sm'
-                : 'w-full max-w-[440px] p-6 text-sm'
-            } ${fontSize === 'grande' ? 'text-sm sm:text-base' : ''}`}
+            className={`printable-receipt bg-white text-black shadow-xl border-2 border-black font-sans space-y-3 transition-all duration-200 rounded-xs w-[290px] p-4 text-xs ${fontSize === 'grande' ? 'text-sm sm:text-base' : ''}`}
           >
             {receiptType === 'etiqueta_mesa' ? (
               /* ================= ETIQUETA DE MESA VISUAL PREVIEW ================= */

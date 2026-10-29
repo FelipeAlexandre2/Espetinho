@@ -157,7 +157,6 @@ export type TabType =
   | 'mesas'
   | 'caixa' 
   | 'pedidos' 
-  | 'churrasqueira' 
   | 'cardapio' 
   | 'estoque' 
   | 'relatorios' 
@@ -506,8 +505,6 @@ export function getTabRequiredPermission(tab: TabType): SystemPermission | null 
   switch (tab) {
     case 'caixa':
       return 'access_caixa';
-    case 'churrasqueira':
-      return 'access_churrasqueira';
     case 'estoque':
       return 'manage_stock';
     case 'relatorios':
@@ -537,8 +534,6 @@ export function getTabTitle(tab: TabType): string {
     case 'pedidos':
     case 'pedidos_estoque':
       return 'Gestão de Pedidos';
-    case 'churrasqueira':
-      return 'Cozinha & Churrasqueira (KDS)';
     case 'estoque':
       return 'Controle de Estoque';
     case 'relatorios':

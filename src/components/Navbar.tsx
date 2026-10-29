@@ -72,7 +72,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   // Permission checks
   const canAccessCaixa = hasPermission(currentUser, 'access_caixa');
-  const canAccessChurrasqueira = hasPermission(currentUser, 'access_churrasqueira');
   const canAccessEstoque = hasPermission(currentUser, 'manage_stock');
   const canAccessRelatorios = hasPermission(currentUser, 'view_reports');
   const canAccessUsuarios = hasPermission(currentUser, 'manage_users');

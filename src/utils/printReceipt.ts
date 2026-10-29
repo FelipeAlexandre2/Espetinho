@@ -68,10 +68,7 @@ export function generateReceiptHtml(
   const isKitchen = type === 'cozinha' || isEtiquetaMesa;
   const isPreCheck = type === 'pre_conta';
 
-  const skewerItems = order.items.filter(isSkewerItem);
-  const tableItems = order.items.filter((item) => !isSkewerItem(item));
-  const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
-  const totalTableItems = tableItems.reduce((sum, item) => sum + item.quantity, 0);
+
 
   const widthStyle =
     paperWidth === '58mm'
@@ -88,60 +85,6 @@ export function generateReceiptHtml(
     ? '📄 CONFERÊNCIA DE MESA / PRÉ-CONTA'
     : '*** COMPROVANTE NÃO FISCAL ***';
 
-  // Format skewer items for table label
-  const skewerItemsHtml = skewerItems
-    .map((item) => {
-      const meatPointLabel = item.meatPoint
-        ? item.meatPoint === 'mal_passada'
-          ? 'MAL PASSADA'
-          : item.meatPoint === 'ao_ponto'
-          ? 'AO PONTO'
-          : 'BEM PASSADA'
-        : null;
-
-      return `
-        <div style="margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px dashed #000000;">
-          <div style="display: flex; justify-content: space-between; font-weight: 900; color: #000000; font-size: 16px;">
-            <span>[ ] ${item.quantity}x ${item.productName.toUpperCase()}</span>
-          </div>
-          ${
-            meatPointLabel
-              ? `<div style="font-weight: 900; color: #ffffff; background: #000000; display: inline-block; padding: 1px 6px; border-radius: 2px; margin-top: 2px; font-size: 12px;">
-                  ▸ PONTO: ${meatPointLabel}
-                </div>`
-              : ''
-          }
-          ${
-            item.notes
-              ? `<div style="font-weight: 900; color: #000000; padding: 2px 4px; margin-top: 2px; font-size: 12px; border: 1px solid #000000; background: #fffbe6;">
-                  ⚠️ OBS: ${item.notes.toUpperCase()}
-                </div>`
-              : ''
-          }
-        </div>
-      `;
-    })
-    .join('');
-
-  // Format table items (non-skewers: jantinha, sides, drinks) for table label
-  const tableItemsHtml = tableItems
-    .map((item) => {
-      return `
-        <div style="margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px dashed #000000;">
-          <div style="display: flex; justify-content: space-between; font-weight: 900; color: #000000; font-size: 15px;">
-            <span>[ ] ${item.quantity}x ${item.productName.toUpperCase()}</span>
-          </div>
-          ${
-            item.notes
-              ? `<div style="font-weight: 900; color: #000000; padding: 2px 4px; margin-top: 2px; font-size: 12px; border: 1px solid #000000; background: #fffbe6;">
-                  ⚠️ OBS: ${item.notes.toUpperCase()}
-                </div>`
-              : ''
-          }
-        </div>
-      `;
-    })
-    .join('');
 
   const standardItemsHtml = order.items
     .map((item) => {
@@ -256,7 +199,7 @@ export function generateReceiptHtml(
 <body>
   <div class="receipt-container">
     ${
-      type === 'cozinha'
+      type === 'cozinha' || type === 'etiqueta_mesa'
         ? `
       <!-- ================= COMANDA DE COZINHA (SUPER JUSTA: SOMENTE NOME E PEDIDO) ================= -->
       <div style="text-align: center; margin-bottom: 2px;">
@@ -318,80 +261,6 @@ export function generateReceiptHtml(
 
       <div style="border-top: 1px dashed #000000; margin-top: 2px; padding-top: 2px; text-align: center; font-size: 10px; font-weight: 900; color: #000000;">
         --- FIM DO PEDIDO ---
-      </div>
-    `
-        : isEtiquetaMesa
-        ? `
-      <!-- ================= ETIQUETA DE MESA & ESPETOS LAYOUT ================= -->
-      <div class="text-center">
-        <div class="header-title">${settings.restaurantName || 'MARESIA'}</div>
-        ${settings.subtitle ? `<div style="font-size: 11px;">${settings.subtitle}</div>` : ''}
-        <div class="badge" style="background: #000; color: #fff; font-size: 11px; padding: 3px 6px; font-weight: 900;">
-          🏷️ ETIQUETA - COZINHA & CHURRASQUEIRA
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <!-- Giant Table Box -->
-      <div style="border: 3px solid #000; padding: 6px 4px; text-align: center; margin: 4px 0; background: #fff;">
-        <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #334155;">IDENTIFICAÇÃO / MESA:</div>
-        <div style="font-size: 26px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.1;">
-          📍 ${order.tableOrCustomer}
-        </div>
-        <div class="flex-between bold" style="font-size: 12px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #000;">
-          <span>PEDIDO #${order.orderNumber}</span>
-          <span>${formattedTime} (${formattedDate})</span>
-        </div>
-      </div>
-
-      <!-- Giant Skewers Count Box -->
-      <div style="background: #000; color: #fff; padding: 8px 4px; text-align: center; border-radius: 4px; margin: 8px 0;">
-        <div style="font-size: 11px; font-weight: bold; letter-spacing: 1px;">TOTAL DE ESPETOS NA BRASA</div>
-        <div style="font-size: 24px; font-weight: 900; line-height: 1.1; margin-top: 2px;">
-          🍢 ${totalSkewers} ${totalSkewers === 1 ? 'ESPETO' : 'ESPETOS'}
-        </div>
-      </div>
-
-      <!-- Skewers List -->
-      <div style="margin: 8px 0;">
-        <div style="font-size: 13px; font-weight: 900; border-bottom: 2px solid #000; padding-bottom: 3px; margin-bottom: 6px; text-transform: uppercase;">
-          🍢 ESPETOS NA BRASA (${totalSkewers} UN):
-        </div>
-        ${
-          skewerItems.length > 0
-            ? skewerItemsHtml
-            : '<div style="font-size: 12px; font-style: italic; padding: 4px 0;">(Nenhum espeto neste pedido)</div>'
-        }
-      </div>
-
-      <!-- Table Items List -->
-      <div style="margin: 10px 0;">
-        <div style="font-size: 13px; font-weight: 900; border-bottom: 2px solid #000; padding-bottom: 3px; margin-bottom: 6px; text-transform: uppercase;">
-          🍽️ O QUE VAI NA MESA (${totalTableItems} ${totalTableItems === 1 ? 'ITEM' : 'ITENS'}):
-        </div>
-        ${
-          tableItems.length > 0
-            ? tableItemsHtml
-            : '<div style="font-size: 12px; font-style: italic; padding: 4px 0;">(Apenas espetos neste pedido)</div>'
-        }
-      </div>
-
-      ${
-        order.notes
-          ? `<div style="border: 2px dashed #000; padding: 6px; font-size: 13px; font-weight: 900; margin: 8px 0; background: #fffbe6;">
-              ⚠️ OBS DA MESA: ${order.notes.toUpperCase()}
-            </div>`
-          : ''
-      }
-
-      <div class="divider-double"></div>
-
-      <div class="text-center" style="font-size: 11px; font-weight: 900; margin-top: 4px;">
-        ✓ CONFERÊNCIA ATENDENTE & GRELHA • ${settings.restaurantName || 'MARESIA'}
-      </div>
-      <div class="text-center" style="font-size: 8px; color: #64748b; margin-top: 2px;">
-        Sistema de Gestão & KDS
       </div>
     `
         : `
@@ -665,7 +534,7 @@ export function formatReceiptWhatsAppText(
   const isEtiquetaMesa = type === 'etiqueta_mesa';
   const isKitchen = type === 'cozinha' || isEtiquetaMesa;
 
-  if (type === 'cozinha') {
+  if (type === 'cozinha' || isEtiquetaMesa) {
     let text = `*📍 ${order.tableOrCustomer.toUpperCase()}*\n`;
     text += `*PEDIDO #${order.orderNumber}* • ${formattedTime}\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -685,52 +554,6 @@ export function formatReceiptWhatsAppText(
     });
     text += `━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `--- FIM DO PEDIDO ---`;
-    return text;
-  }
-
-  if (isEtiquetaMesa) {
-    const skewerItems = order.items.filter(isSkewerItem);
-    const tableItems = order.items.filter((item) => !isSkewerItem(item));
-    const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
-
-    let text = `🔥 *${settings.restaurantName || 'ESPETINHO DO CHEFE'}* 🔥\n`;
-    text += `🏷️ *ETIQUETA DE MESA & ESPETOS*\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `📍 *MESA/CLIENTE: ${order.tableOrCustomer.toUpperCase()}*\n`;
-    text += `📋 Pedido #${order.orderNumber} • ${formattedDate} às ${formattedTime}\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `🍢 *TOTAL DE ESPETOS: ${totalSkewers} ${totalSkewers === 1 ? 'ESPETO' : 'ESPETOS'}*\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `*🍢 ESPETOS NA BRASA:*\n`;
-    if (skewerItems.length > 0) {
-      skewerItems.forEach((i) => {
-        text += `[ ] *${i.quantity}x* ${i.productName}\n`;
-        if (i.meatPoint) {
-          const pt = i.meatPoint === 'mal_passada' ? 'MAL PASSADA' : i.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA';
-          text += `    ↳ Ponto: *${pt}*\n`;
-        }
-        if (i.notes) text += `    ↳ Obs: ${i.notes}\n`;
-      });
-    } else {
-      text += `_(Nenhum espeto neste pedido)_\n`;
-    }
-
-    text += `\n*🍽️ O QUE VAI NA MESA:*\n`;
-    if (tableItems.length > 0) {
-      tableItems.forEach((i) => {
-        text += `[ ] *${i.quantity}x* ${i.productName}\n`;
-        if (i.notes) text += `    ↳ Obs: ${i.notes}\n`;
-      });
-    } else {
-      text += `_(Apenas espetos neste pedido)_\n`;
-    }
-
-    if (order.notes) {
-      text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      text += `⚠️ *OBS DA MESA:* ${order.notes}\n`;
-    }
-    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `✓ Agilidade no atendimento e na brasa! 🔥\n`;
     return text;
   }
 
@@ -828,62 +651,7 @@ export function formatReceiptRawText(
   const isEtiquetaMesa = type === 'etiqueta_mesa';
   const isKitchen = type === 'cozinha' || isEtiquetaMesa;
 
-  if (isEtiquetaMesa) {
-    const skewerItems = order.items.filter(isSkewerItem);
-    const tableItems = order.items.filter((item) => !isSkewerItem(item));
-    const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
-
-    const lines: string[] = [
-      padCenter(settings.restaurantName || 'MARESIA'),
-      padCenter('*** ETIQUETA MESA & ESPETOS ***'),
-      doubleSeparator,
-      padCenter(`>> ${order.tableOrCustomer.toUpperCase()} <<`),
-      padBetween(`PEDIDO #${order.orderNumber}`, `${formattedTime} (${formattedDate})`),
-      separator,
-      padCenter(`🍢 TOTAL ESPETOS: ${totalSkewers} 🍢`),
-      separator,
-      '🍢 ESPETOS NA BRASA:',
-    ];
-
-    if (skewerItems.length > 0) {
-      skewerItems.forEach((item) => {
-        lines.push(`[ ] ${item.quantity}x ${item.productName}`);
-        if (item.meatPoint) {
-          const pt = item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA';
-          lines.push(`    > PONTO: ${pt}`);
-        }
-        if (item.notes) {
-          lines.push(`    * OBS: ${item.notes}`);
-        }
-      });
-    } else {
-      lines.push('  (Nenhum espeto)');
-    }
-
-    lines.push(separator);
-    lines.push(`🍽️ O QUE VAI NA MESA (${tableItems.reduce((acc, i) => acc + i.quantity, 0)} ITENS):`);
-    if (tableItems.length > 0) {
-      tableItems.forEach((item) => {
-        lines.push(`[ ] ${item.quantity}x ${item.productName}`);
-        if (item.notes) {
-          lines.push(`    * OBS: ${item.notes}`);
-        }
-      });
-    } else {
-      lines.push('  (Apenas espetos)');
-    }
-
-    if (order.notes) {
-      lines.push(separator);
-      lines.push(`OBS GERAL: ${order.notes}`);
-    }
-
-    lines.push(doubleSeparator);
-    lines.push(padCenter('AGILIDADE NA GRELHA & ATENDIMENTO'));
-    return lines.join('\n');
-  }
-
-  if (type === 'cozinha') {
+  if (type === 'cozinha' || isEtiquetaMesa) {
     const lines: string[] = [
       padCenter(order.tableOrCustomer.toUpperCase()),
       padBetween(`PEDIDO #${order.orderNumber}`, `${formattedTime} (${formattedDate})`),

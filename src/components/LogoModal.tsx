@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Link as LinkIcon, RefreshCw, Check, AlertCircle, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { X, Upload, Link as LinkIcon, RefreshCw, Check, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
 interface LogoModalProps {
@@ -15,7 +15,7 @@ export const LogoModal: React.FC<LogoModalProps> = ({
   currentLogo,
   onSaveLogo,
 }) => {
-  const [activeTab, setActiveTab] = useState<'upload' | 'url' | 'github'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'url'>('upload');
   const [previewUrl, setPreviewUrl] = useState<string>(currentLogo || '/logo/capa.png');
   const [inputUrl, setInputUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -136,7 +136,7 @@ export const LogoModal: React.FC<LogoModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="grid grid-cols-3 p-2 bg-slate-950/60 border-b border-slate-800 text-xs font-bold gap-1">
+        <div className="grid grid-cols-2 p-2 bg-slate-950/60 border-b border-slate-800 text-xs font-bold gap-1">
           <button
             onClick={() => setActiveTab('upload')}
             className={`py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -146,7 +146,7 @@ export const LogoModal: React.FC<LogoModalProps> = ({
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>Enviar Foto</span>
+            <span>Enviar Foto do Computador</span>
           </button>
 
           <button
@@ -158,19 +158,7 @@ export const LogoModal: React.FC<LogoModalProps> = ({
             }`}
           >
             <LinkIcon className="w-3.5 h-3.5" />
-            <span>Colar Link</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('github')}
-            className={`py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
-              activeTab === 'github'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Pelo GitHub</span>
+            <span>Colar Link da Web</span>
           </button>
         </div>
 
@@ -225,7 +213,7 @@ export const LogoModal: React.FC<LogoModalProps> = ({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  Link direto da imagem (URL da internet ou GitHub Raw):
+                  Link direto da imagem (URL da internet):
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -244,24 +232,6 @@ export const LogoModal: React.FC<LogoModalProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Tab 3: Instrução GitHub Super Simples */}
-          {activeTab === 'github' && (
-            <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 text-xs text-slate-300 space-y-2.5">
-              <p className="font-bold text-amber-400 text-sm">
-                Como colocar pelo GitHub (Caminho mais fácil):
-              </p>
-              <p>
-                Basta salvar a sua imagem com o nome <strong>capa.png</strong> e colocar diretamente na pasta:
-              </p>
-              <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-xl font-mono text-amber-300 text-xs text-center select-all">
-                public/logo/capa.png
-              </div>
-              <p className="text-slate-400 text-[11px]">
-                (Ou se preferir, pode jogar como <code>capa.png</code> diretamente na raiz principal do projeto). O sistema carrega na hora!
-              </p>
             </div>
           )}
 

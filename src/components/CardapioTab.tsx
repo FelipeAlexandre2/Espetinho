@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Product, Category, Order, MeatPoint, TABLES, AppUser, hasPermission, canUserCreateOrder } from '../types';
-import { Plus, Minus, Search, Edit2, Trash2, Check, X, Flame, Package, Zap, Tag, DollarSign, Image as ImageIcon, Utensils, CheckCircle2, Lock, QrCode } from 'lucide-react';
+import { Plus, Minus, Search, Edit2, Trash2, Check, X, Flame, Package, Zap, Tag, DollarSign, Image as ImageIcon, Utensils, CheckCircle2, Lock, QrCode, Upload, Crop, ExternalLink } from 'lucide-react';
 import { QrCodeModal } from './QrCodeModal';
 import { isBeverageProduct, isSkewerOrMeatProduct } from '../utils/productUtils';
+import { processAndResizeImage } from '../utils/imageOptimizer';
 
 interface CardapioTabProps {
   products: Product[];
@@ -52,6 +53,55 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
   const [tableMeatPoint, setTableMeatPoint] = useState<MeatPoint>('ao_ponto');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Image Upload & Auto-adjustment states
+  const [imageSourceMode, setImageSourceMode] = useState<'file' | 'url'>('file');
+  const [imageAspectRatio, setImageAspectRatio] = useState<'standard' | 'square' | 'original'>('standard');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastSelectedFile = useRef<File | null>(null);
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    lastSelectedFile.current = file;
+    setIsProcessingImage(true);
+    setImageError(null);
+    try {
+      const resized = await processAndResizeImage(file, {
+        aspectRatio: imageAspectRatio,
+        maxWidth: 800,
+        maxHeight: 600,
+        quality: 0.85,
+      });
+      setFormData((prev) => ({ ...prev, photoUrl: resized }));
+    } catch (err: any) {
+      setImageError(err.message || 'Erro ao processar imagem.');
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  const handleChangeAspectRatio = async (ratio: 'standard' | 'square' | 'original') => {
+    setImageAspectRatio(ratio);
+    if (lastSelectedFile.current) {
+      setIsProcessingImage(true);
+      try {
+        const resized = await processAndResizeImage(lastSelectedFile.current, {
+          aspectRatio: ratio,
+          maxWidth: 800,
+          maxHeight: 600,
+          quality: 0.85,
+        });
+        setFormData((prev) => ({ ...prev, photoUrl: resized }));
+      } catch (err) {
+        // ignore
+      } finally {
+        setIsProcessingImage(false);
+      }
+    }
+  };
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -77,6 +127,9 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
 
   const handleOpenAddModal = () => {
     setEditingProduct(null);
+    setImageError(null);
+    lastSelectedFile.current = null;
+    setImageSourceMode('file');
     setFormData({
       name: '',
       category: 'espetos_tradicionais',
@@ -95,6 +148,9 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
 
   const handleOpenEditModal = (product: Product) => {
     setEditingProduct(product);
+    setImageError(null);
+    lastSelectedFile.current = null;
+    setImageSourceMode(product.photoUrl && product.photoUrl.startsWith('http') ? 'url' : 'file');
     setFormData({
       name: product.name,
       category: product.category,
@@ -563,27 +619,205 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  URL da Foto do Produto
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={formData.photoUrl}
-                    onChange={(e) => setFormData({ ...formData, photoUrl: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
+              {/* Foto do Produto (Upload do Computador com Auto-Ajuste ou Link) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 uppercase">
+                    Foto do Produto
+                  </label>
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setImageSourceMode('file')}
+                      className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
+                        imageSourceMode === 'file'
+                          ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      📁 Do Computador
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageSourceMode('url')}
+                      className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
+                        imageSourceMode === 'url'
+                          ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      🔗 Link URL
+                    </button>
+                  </div>
                 </div>
-                {formData.photoUrl && (
-                  <div className="mt-2 h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 relative">
-                    <img
-                      src={formData.photoUrl}
-                      alt="Preview"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
+
+                {imageSourceMode === 'file' ? (
+                  <div className="space-y-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileChange}
+                      className="hidden"
                     />
+
+                    {formData.photoUrl ? (
+                      /* Live Preview & Adjustment Controls */
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-amber-500/40 bg-slate-950 shrink-0 relative group shadow-sm">
+                            <img
+                              src={formData.photoUrl}
+                              alt="Prévia do produto"
+                              className="w-full h-full object-cover"
+                            />
+                            {isProcessingImage && (
+                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-[10px] font-bold">
+                                Ajustando...
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <Check className="w-3 h-3" /> Foto Ajustada
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData({ ...formData, photoUrl: '' });
+                                  lastSelectedFile.current = null;
+                                }}
+                                className="text-red-500 hover:text-red-700 text-xs font-bold hover:underline cursor-pointer"
+                              >
+                                Remover
+                              </button>
+                            </div>
+
+                            {/* Aspect Ratio / Fit Selection Buttons */}
+                            <div>
+                              <span className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                                Enquadramento da Imagem:
+                              </span>
+                              <div className="grid grid-cols-3 gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeAspectRatio('standard')}
+                                  className={`py-1 px-1.5 text-[10px] font-bold rounded-lg border transition text-center cursor-pointer ${
+                                    imageAspectRatio === 'standard'
+                                      ? 'bg-amber-500 text-slate-950 border-amber-600 font-black shadow-2xs'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                  title="Proporção 4:3 padrão para cards de cardápio"
+                                >
+                                  Retangular
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeAspectRatio('square')}
+                                  className={`py-1 px-1.5 text-[10px] font-bold rounded-lg border transition text-center cursor-pointer ${
+                                    imageAspectRatio === 'square'
+                                      ? 'bg-amber-500 text-slate-950 border-amber-600 font-black shadow-2xs'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                  title="Proporção 1:1 quadrada centralizada"
+                                >
+                                  Quadrado
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeAspectRatio('original')}
+                                  className={`py-1 px-1.5 text-[10px] font-bold rounded-lg border transition text-center cursor-pointer ${
+                                    imageAspectRatio === 'original'
+                                      ? 'bg-amber-500 text-slate-950 border-amber-600 font-black shadow-2xs'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                  title="Mantém a proporção exata da foto original"
+                                >
+                                  Original
+                                </button>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Upload className="w-3 h-3" />
+                              <span>Escolher outra foto do computador</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Drag & Drop Upload Dropzone */
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) {
+                            lastSelectedFile.current = file;
+                            setIsProcessingImage(true);
+                            try {
+                              const resized = await processAndResizeImage(file, {
+                                aspectRatio: imageAspectRatio,
+                                maxWidth: 800,
+                                maxHeight: 600,
+                                quality: 0.85,
+                              });
+                              setFormData((prev) => ({ ...prev, photoUrl: resized }));
+                            } catch (err: any) {
+                              setImageError(err.message || 'Erro ao processar imagem.');
+                            } finally {
+                              setIsProcessingImage(false);
+                            }
+                          }
+                        }}
+                        className="w-full py-5 px-4 rounded-2xl border-2 border-dashed border-amber-400 hover:border-amber-500 bg-amber-50/50 hover:bg-amber-50 transition flex flex-col items-center justify-center gap-2 cursor-pointer group text-center"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center group-hover:scale-110 transition shadow-2xs">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs sm:text-sm font-black text-slate-800">
+                            {isProcessingImage ? 'Otimizando e ajustando imagem...' : 'Clique para selecionar a foto salva no seu computador'}
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Qualquer tamanho ou formato (JPG, PNG, WebP) • O sistema ajusta automaticamente
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {imageError && (
+                      <p className="text-xs text-red-600 font-bold">{imageError}</p>
+                    )}
+                  </div>
+                ) : (
+                  /* URL Input */
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://exemplo.com/foto-espeto.jpg"
+                        value={formData.photoUrl}
+                        onChange={(e) => setFormData({ ...formData, photoUrl: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                      />
+                    </div>
+                    {formData.photoUrl && (
+                      <div className="h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 relative">
+                        <img
+                          src={formData.photoUrl}
+                          alt="Preview"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

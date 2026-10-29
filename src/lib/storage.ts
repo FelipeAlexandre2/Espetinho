@@ -752,7 +752,7 @@ export async function reprintJob(jobId: string): Promise<boolean> {
 
 export async function sendOrderToPrintQueue(
   order: Order, 
-  type: 'etiqueta_mesa' | 'comanda_marmita' | 'cozinha' = 'etiqueta_mesa',
+  type: 'etiqueta_mesa' | 'comanda_marmita' | 'cozinha' = 'cozinha',
   source: 'celular' | 'terminal' = 'celular'
 ): Promise<boolean> {
   try {

@@ -256,7 +256,71 @@ export function generateReceiptHtml(
 <body>
   <div class="receipt-container">
     ${
-      isEtiquetaMesa
+      type === 'cozinha'
+        ? `
+      <!-- ================= COMANDA DE COZINHA (SUPER JUSTA: SOMENTE NOME E PEDIDO) ================= -->
+      <div style="text-align: center; margin-bottom: 2px;">
+        <div style="font-size: 24px; font-weight: 900; text-transform: uppercase; line-height: 1.05; color: #000000; padding: 1px 0;">
+          ${order.tableOrCustomer}
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #000000; border-top: 1px dashed #000000; border-bottom: 1px dashed #000000; padding: 2px 0; margin-top: 2px;">
+          <span>PEDIDO #${order.orderNumber}</span>
+          <span>${formattedTime} (${formattedDate})</span>
+        </div>
+      </div>
+
+      ${
+        order.notes
+          ? `<div style="font-size: 11px; font-weight: 900; margin: 2px 0; padding: 2px 4px; border: 1px dashed #000000; background: #fffbeb; color: #000000; line-height: 1.15;">
+              ⚠️ OBS: ${order.notes.toUpperCase()}
+            </div>`
+          : ''
+      }
+
+      <!-- O PEDIDO -->
+      <div style="margin: 2px 0;">
+        ${order.items
+          .map((item, idx) => {
+            const meatPointLabel = item.meatPoint
+              ? item.meatPoint === 'mal_passada'
+                ? 'MAL PASSADA'
+                : item.meatPoint === 'ao_ponto'
+                ? 'AO PONTO'
+                : 'BEM PASSADA'
+              : null;
+
+            const isLast = idx === order.items.length - 1;
+
+            return `
+              <div style="padding: 2.5px 0; ${!isLast ? 'border-bottom: 1px dashed #000000;' : ''}">
+                <div style="font-size: 16px; font-weight: 900; color: #000000; line-height: 1.15;">
+                  [ ] ${item.quantity}x ${item.productName.toUpperCase()}
+                </div>
+                ${
+                  meatPointLabel
+                    ? `<div style="font-weight: 900; color: #ffffff; background: #000000; display: inline-block; padding: 1px 4px; border-radius: 2px; margin-top: 1.5px; font-size: 11px; line-height: 1.15;">
+                        ▸ PONTO: ${meatPointLabel}
+                      </div>`
+                    : ''
+                }
+                ${
+                  item.notes
+                    ? `<div style="font-weight: 900; color: #000000; padding: 1.5px 4px; margin-top: 1.5px; font-size: 11px; border: 1px dashed #000000; background: #fffbeb; line-height: 1.15;">
+                        ⚠️ OBS: ${item.notes.toUpperCase()}
+                      </div>`
+                    : ''
+                }
+              </div>
+            `;
+          })
+          .join('')}
+      </div>
+
+      <div style="border-top: 1px dashed #000000; margin-top: 2px; padding-top: 2px; text-align: center; font-size: 10px; font-weight: 900; color: #000000;">
+        --- FIM DO PEDIDO ---
+      </div>
+    `
+        : isEtiquetaMesa
         ? `
       <!-- ================= ETIQUETA DE MESA & ESPETOS LAYOUT ================= -->
       <div class="text-center">
@@ -601,6 +665,29 @@ export function formatReceiptWhatsAppText(
   const isEtiquetaMesa = type === 'etiqueta_mesa';
   const isKitchen = type === 'cozinha' || isEtiquetaMesa;
 
+  if (type === 'cozinha') {
+    let text = `*📍 ${order.tableOrCustomer.toUpperCase()}*\n`;
+    text += `*PEDIDO #${order.orderNumber}* • ${formattedTime}\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    if (order.notes) {
+      text += `⚠️ *OBS:* ${order.notes.toUpperCase()}\n`;
+      text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    }
+    order.items.forEach((item) => {
+      text += `[ ] *${item.quantity}x ${item.productName.toUpperCase()}*\n`;
+      if (item.meatPoint) {
+        const pt = item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA';
+        text += `    ↳ Ponto: *${pt}*\n`;
+      }
+      if (item.notes) {
+        text += `    ↳ Obs: _${item.notes}_\n`;
+      }
+    });
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `--- FIM DO PEDIDO ---`;
+    return text;
+  }
+
   if (isEtiquetaMesa) {
     const skewerItems = order.items.filter(isSkewerItem);
     const tableItems = order.items.filter((item) => !isSkewerItem(item));
@@ -793,6 +880,36 @@ export function formatReceiptRawText(
 
     lines.push(doubleSeparator);
     lines.push(padCenter('AGILIDADE NA GRELHA & ATENDIMENTO'));
+    return lines.join('\n');
+  }
+
+  if (type === 'cozinha') {
+    const lines: string[] = [
+      padCenter(order.tableOrCustomer.toUpperCase()),
+      padBetween(`PEDIDO #${order.orderNumber}`, `${formattedTime} (${formattedDate})`),
+      doubleSeparator,
+    ];
+    if (order.notes) {
+      lines.push(`OBS: ${order.notes.toUpperCase()}`);
+      lines.push(separator);
+    }
+    order.items.forEach((item) => {
+      lines.push(`[ ] ${item.quantity}x ${item.productName.toUpperCase()}`);
+      if (item.meatPoint) {
+        const pt =
+          item.meatPoint === 'mal_passada'
+            ? 'MAL PASSADA'
+            : item.meatPoint === 'ao_ponto'
+            ? 'AO PONTO'
+            : 'BEM PASSADA';
+        lines.push(`    > PONTO: ${pt}`);
+      }
+      if (item.notes) {
+        lines.push(`    * OBS: ${item.notes.toUpperCase()}`);
+      }
+    });
+    lines.push(doubleSeparator);
+    lines.push(padCenter('--- FIM DO PEDIDO ---'));
     return lines.join('\n');
   }
 

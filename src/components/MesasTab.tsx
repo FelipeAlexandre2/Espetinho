@@ -249,20 +249,20 @@ export const MesasTab: React.FC<MesasTabProps> = ({
     );
 
     // Send to USB Printer queue on the computer
-    sendOrderToPrintQueue(finalOrderForPrinting, 'etiqueta_mesa', isMobileDevice ? 'celular' : 'terminal').catch(console.warn);
+    sendOrderToPrintQueue(finalOrderForPrinting, 'cozinha', isMobileDevice ? 'celular' : 'terminal').catch(console.warn);
 
     // If on computer (or non-mobile), trigger local print directly as well
     if (!isMobileDevice) {
       try {
         const settings = getReceiptSettings();
-        printReceiptDirect(finalOrderForPrinting, settings, 'etiqueta_mesa', '58mm');
+        printReceiptDirect(finalOrderForPrinting, settings, 'cozinha', '58mm');
       } catch (e) {
         console.warn('Erro na impressão direta, abrindo modal:', e);
-        onPrintReceipt(finalOrderForPrinting, 'etiqueta_mesa');
+        onPrintReceipt(finalOrderForPrinting, 'cozinha');
       }
     }
 
-    setSuccessBanner(`✅ Pedido lançado na ${selectedTable}! Etiqueta 58mm enviada para a impressora USB.`);
+    setSuccessBanner(`✅ Pedido lançado na ${selectedTable}! Comanda da Cozinha enviada para a impressora USB.`);
     setNewItems([]);
     
     // Auto-clear success banner after 4 seconds

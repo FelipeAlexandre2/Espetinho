@@ -7,8 +7,7 @@ import {
   openReceiptInNewWindow, 
   formatReceiptWhatsAppText, 
   formatReceiptRawText, 
-  shareReceiptNative,
-  isSkewerItem
+  shareReceiptNative
 } from '../utils/printReceipt';
 import { 
   Printer, X, Check, Share2, Copy, ExternalLink, Settings, 
@@ -26,14 +25,16 @@ interface ReceiptModalProps {
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ 
   order, 
   onClose,
-  initialType = 'etiqueta_mesa',
+  initialType = 'cozinha',
   autoPrint = false
 }) => {
   if (!order) return null;
 
   // Print format & profile states (Locked to 58mm per user request)
   const [paperWidth] = useState<ReceiptPaperWidth>('58mm');
-  const [receiptType, setReceiptType] = useState<ReceiptType>(initialType);
+  const [receiptType, setReceiptType] = useState<ReceiptType>(
+    initialType === 'etiqueta_mesa' ? 'cozinha' : initialType
+  );
   const [fontSize, setFontSize] = useState<'normal' | 'grande'>('grande');
   const [settings, setSettings] = useState<ReceiptSettings>(getReceiptSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -46,11 +47,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     setSettings(loaded);
   }, []);
 
-  // Compute skewers and table items for the label
-  const skewerItems = order.items.filter(isSkewerItem);
-  const tableItems = order.items.filter((item) => !isSkewerItem(item));
-  const totalSkewers = skewerItems.reduce((sum, item) => sum + item.quantity, 0);
-  const totalTableItems = tableItems.reduce((sum, item) => sum + item.quantity, 0);
+
 
   const handleSaveSettings = (newSettings: ReceiptSettings) => {
     setSettings(newSettings);
@@ -146,18 +143,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             
             {/* Document Type Selector */}
             <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs overflow-x-auto">
-              <button
-                type="button"
-                onClick={() => setReceiptType('etiqueta_mesa')}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap ${
-                  receiptType === 'etiqueta_mesa'
-                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Etiqueta com quantidade de espetos e itens que vão para a mesa"
-              >
-                <span>🏷️ Etiqueta Mesa</span>
-              </button>
+
               <button
                 type="button"
                 onClick={() => setReceiptType('cozinha')}
@@ -305,108 +291,55 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/60 flex items-center justify-center min-h-[300px]">
           
           <div 
-            className={`printable-receipt bg-white text-black shadow-xl border-2 border-black font-sans space-y-3 transition-all duration-200 rounded-xs w-[290px] p-4 text-xs ${fontSize === 'grande' ? 'text-sm sm:text-base' : ''}`}
+            className={`printable-receipt bg-white text-black shadow-xl border-2 border-black font-sans transition-all duration-200 rounded-xs w-[290px] ${
+              receiptType === 'cozinha' ? 'p-2.5 space-y-1.5' : 'p-4 space-y-3'
+            } text-xs ${fontSize === 'grande' ? 'text-sm sm:text-base' : ''}`}
           >
-            {receiptType === 'etiqueta_mesa' ? (
-              /* ================= ETIQUETA DE MESA VISUAL PREVIEW ================= */
-              <div className="space-y-3">
-                {/* Header */}
-                <div className="text-center space-y-0.5 border-b-2 border-black pb-2.5">
-                  <h2 className="font-black text-black text-lg uppercase tracking-wider">
-                    {settings.restaurantName || 'MARESIA'}
-                  </h2>
-                  <div className="inline-block bg-black text-white px-3 py-0.5 rounded text-[11px] font-black uppercase tracking-wider">
-                    🏷️ ETIQUETA DE MESA & ESPETOS
+            {receiptType === 'cozinha' ? (
+              /* ================= COMANDA DE COZINHA (SUPER JUSTA: SOMENTE NOME E PEDIDO) ================= */
+              <div className="space-y-1.5">
+                {/* Nome do Cliente / Mesa bem destacado e justo */}
+                <div className="text-center">
+                  <div className="text-2xl font-black text-black uppercase tracking-tight leading-none py-0.5">
+                    {order.tableOrCustomer}
                   </div>
-                </div>
-
-                {/* Big Table / Comanda Box */}
-                <div className="border-3 border-black p-3 text-center bg-white rounded-lg space-y-1">
-                  <div className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
-                    MESA / IDENTIFICAÇÃO
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-black text-black uppercase tracking-tight">
-                    📍 {order.tableOrCustomer}
-                  </div>
-                  <div className="flex justify-between items-center text-xs font-black border-t border-dashed border-black pt-1.5 mt-1">
+                  <div className="flex justify-between items-center text-[11px] font-black border-y border-dashed border-black py-0.5 mt-1 text-black">
                     <span>PEDIDO #{order.orderNumber}</span>
-                    <span>{formattedTime} • {formattedDate}</span>
+                    <span>{formattedTime} ({formattedDate})</span>
                   </div>
                 </div>
 
-                {/* Giant Skewers Callout Box */}
-                <div className="bg-black text-white p-3 rounded-xl text-center space-y-0.5 shadow-md">
-                  <div className="text-[11px] font-bold text-amber-400 tracking-widest uppercase">
-                    TOTAL DE ESPETOS NA BRASA
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-black text-white">
-                    🍢 {totalSkewers} {totalSkewers === 1 ? 'ESPETO' : 'ESPETOS'}
-                  </div>
-                </div>
-
-                {/* Skewers List */}
-                <div className="space-y-1.5 border-b-2 border-black pb-3">
-                  <div className="text-xs font-black uppercase text-black border-b border-black pb-1 flex justify-between items-center">
-                    <span>🍢 Espetos na Brasa</span>
-                    <span className="text-slate-800 font-black">{totalSkewers} un.</span>
-                  </div>
-                  {skewerItems.length > 0 ? (
-                    skewerItems.map((item) => (
-                      <div key={item.id} className="p-2 bg-slate-50 border border-black rounded-lg space-y-1">
-                        <div className="flex justify-between items-center font-black text-black text-sm">
-                          <span>[ ] {item.quantity}x {item.productName.toUpperCase()}</span>
-                        </div>
-                        {item.meatPoint && (
-                          <div className="inline-block bg-black text-white text-[10px] font-black px-2 py-0.5 rounded">
-                            ▸ Ponto: {item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA'}
-                          </div>
-                        )}
-                        {item.notes && (
-                          <div className="text-[11px] font-black text-amber-950 bg-amber-100 p-1 rounded border border-amber-300">
-                            ⚠️ Obs: {item.notes.toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs italic text-slate-500 py-1">(Nenhum espeto neste pedido)</p>
-                  )}
-                </div>
-
-                {/* Table Items List */}
-                <div className="space-y-1.5 border-b-2 border-black pb-3">
-                  <div className="text-xs font-black uppercase text-black border-b border-black pb-1 flex justify-between items-center">
-                    <span>🍽️ O que vai na Mesa (Acompanhamentos / Bebidas / Porções)</span>
-                    <span className="text-slate-800 font-black">{totalTableItems} un.</span>
-                  </div>
-                  {tableItems.length > 0 ? (
-                    tableItems.map((item) => (
-                      <div key={item.id} className="p-2 bg-slate-50 border border-slate-300 rounded-lg space-y-1">
-                        <div className="flex justify-between items-center font-black text-black text-sm">
-                          <span>[ ] {item.quantity}x {item.productName.toUpperCase()}</span>
-                        </div>
-                        {item.notes && (
-                          <div className="text-[11px] font-black text-amber-950 bg-amber-100 p-1 rounded border border-amber-300">
-                            ⚠️ Obs: {item.notes.toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs italic text-slate-500 py-1">(Apenas espetos neste pedido)</p>
-                  )}
-                </div>
-
-                {/* Order Notes */}
+                {/* Observação Geral do Pedido (se houver) */}
                 {order.notes && (
-                  <div className="text-xs bg-amber-100 p-2 rounded-lg border-2 border-dashed border-black text-black font-black">
-                    ⚠️ OBS GERAL DA MESA: {order.notes.toUpperCase()}
+                  <div className="text-[11px] font-black bg-amber-50 px-1.5 py-0.5 border border-dashed border-black text-black leading-tight">
+                    ⚠️ OBS: {order.notes.toUpperCase()}
                   </div>
                 )}
 
-                {/* Label Footer */}
-                <div className="text-center pt-2 text-[10px] text-slate-700 font-black">
-                  ✓ Conferência Atendente & Grelha • {settings.restaurantName || 'Maresia'}
+                {/* Itens do Pedido (Super Justos e Legíveis) */}
+                <div className="divide-y divide-dashed divide-black">
+                  {order.items.map((item) => (
+                    <div key={item.id} className="py-1 space-y-0.5">
+                      <div className="text-sm sm:text-base font-black text-black leading-tight">
+                        [ ] {item.quantity}x {item.productName.toUpperCase()}
+                      </div>
+                      {item.meatPoint && (
+                        <div className="text-[11px] font-black text-white bg-black inline-block px-1.5 py-0.5 rounded leading-none">
+                          ▸ Ponto: {item.meatPoint === 'mal_passada' ? 'MAL PASSADA' : item.meatPoint === 'ao_ponto' ? 'AO PONTO' : 'BEM PASSADA'}
+                        </div>
+                      )}
+                      {item.notes && (
+                        <div className="text-[11px] font-bold text-amber-950 bg-amber-50 px-1 py-0.5 border border-dashed border-black/40 rounded leading-tight">
+                          ⚠️ Obs: {item.notes.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Fim do Pedido (Único traço sem linhas duplicadas) */}
+                <div className="text-center pt-1 text-[11px] font-black text-black border-t border-dashed border-black">
+                  --- FIM DO PEDIDO ---
                 </div>
               </div>
             ) : (
@@ -423,9 +356,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   {settings.cnpj && <p className="text-xs font-bold text-black">CNPJ: {settings.cnpj}</p>}
                   
                   <div className="mt-1 pt-1 inline-block border-2 border-black px-2.5 py-0.5 rounded text-[11px] font-black text-black uppercase bg-slate-50">
-                    {isKitchen
-                      ? '🔥 COMANDA DE COZINHA / GRELHA 🔥'
-                      : receiptType === 'pre_conta'
+                    {receiptType === 'pre_conta'
                       ? '📄 PRÉ-CONTA / CONFERÊNCIA'
                       : '*** COMPROVANTE NÃO FISCAL ***'}
                   </div>
@@ -546,14 +477,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
                 {/* Footer */}
                 <div className="text-center pt-3 border-t border-dashed border-slate-400 text-[10px] text-slate-600 space-y-1">
-                  {isKitchen ? (
-                    <p className="font-black text-slate-900 uppercase">🔥 Agilidade no Preparo! 🔥</p>
-                  ) : (
-                    <>
-                      <p className="font-bold text-slate-900">{settings.footerMessage || 'Obrigado pela preferência!'}</p>
-                      <p>Volte Sempre ao Espetinho do Chefe 🔥</p>
-                    </>
-                  )}
+                  <p className="font-bold text-slate-900">{settings.footerMessage || 'Obrigado pela preferência!'}</p>
+                  <p>Volte Sempre! 🔥</p>
                   <p className="text-[8px] text-slate-400 pt-1">Sistema de Gestão & KDS</p>
                 </div>
               </div>

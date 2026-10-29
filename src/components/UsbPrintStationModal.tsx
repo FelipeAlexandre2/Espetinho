@@ -82,8 +82,8 @@ export const UsbPrintStationModal: React.FC<UsbPrintStationModalProps> = ({
         notes: 'TESTE DE COMUNICAÇÃO CELULAR -> COMPUTADOR USB (58MM)',
       };
 
-      await printReceiptDirect(testOrder, settings, 'etiqueta_mesa', '58mm');
-      showNotification('✅ Etiqueta de teste 58mm enviada para a impressora!');
+      await printReceiptDirect(testOrder, settings, 'cozinha', '58mm');
+      showNotification('✅ Comanda de teste 58mm enviada para a impressora!');
     } catch (e) {
       console.error(e);
       showNotification('⚠️ Erro ao disparar impressão de teste.');
@@ -95,10 +95,11 @@ export const UsbPrintStationModal: React.FC<UsbPrintStationModalProps> = ({
   const handleReprint = async (job: PrintJob) => {
     try {
       const settings = getReceiptSettings();
-      await printReceiptDirect(job.order, settings, job.type || 'etiqueta_mesa', '58mm');
+      const reprintType = (job.type === 'etiqueta_mesa' ? 'cozinha' : job.type) || 'cozinha';
+      await printReceiptDirect(job.order, settings, reprintType, '58mm');
       await reprintJob(job.id);
       onRefreshJobs();
-      showNotification(`✅ Etiqueta #${job.orderNumber} reenviada para a impressora!`);
+      showNotification(`✅ Comanda #${job.orderNumber} reenviada para a impressora!`);
     } catch (e) {
       showNotification('⚠️ Falha ao reimprimir.');
     }

@@ -103,7 +103,7 @@ export default function App() {
 
   // Receipt & Etiqueta Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
-  const [receiptInitialType, setReceiptInitialType] = useState<ReceiptType>('etiqueta_mesa');
+  const [receiptInitialType, setReceiptInitialType] = useState<ReceiptType>('cozinha');
 
   // USB Printer Station (Computer Bridge)
   const [isUsbModalOpen, setIsUsbModalOpen] = useState(false);
@@ -135,7 +135,7 @@ export default function App() {
   };
 
   const handleOpenReceiptModal = (order: Order, type?: ReceiptType) => {
-    setReceiptInitialType(type || (order.isPaid ? 'cliente' : 'etiqueta_mesa'));
+    setReceiptInitialType(type || (order.isPaid ? 'cliente' : 'cozinha'));
     setReceiptOrder(order);
   };
 
@@ -214,7 +214,8 @@ export default function App() {
             // Trigger thermal 58mm printing
             try {
               const settings = getReceiptSettings();
-              await printReceiptDirect(job.order, settings, job.type || 'etiqueta_mesa', '58mm');
+              const printType = (job.type === 'etiqueta_mesa' ? 'cozinha' : job.type) || 'cozinha';
+              await printReceiptDirect(job.order, settings, printType, '58mm');
             } catch (err) {
               console.warn('Erro ao disparar impressão direta:', err);
             }
@@ -988,8 +989,8 @@ export default function App() {
       );
     });
 
-    // Ao confirmar o pedido (atendente ou garçom), abre a etiqueta de mesa com quantidade de espetos e itens da mesa
-    setReceiptInitialType('etiqueta_mesa');
+    // Ao confirmar o pedido (atendente ou garçom), abre a comanda de cozinha justa
+    setReceiptInitialType('cozinha');
     setReceiptOrder(newOrder);
 
     const payLabel = newOrder.payments && newOrder.payments.length > 1

@@ -208,7 +208,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
       await syncOrderToApi(newOrder);
 
       // 2. Enqueue for auto-printing on the computer USB printer
-      await sendOrderToPrintQueue(newOrder, 'etiqueta_mesa', 'celular');
+      await sendOrderToPrintQueue(newOrder, 'cozinha', 'celular');
 
       // 3. Notify parent app if attached
       if (onOrderCreated) {

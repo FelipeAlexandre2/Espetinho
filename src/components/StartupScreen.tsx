@@ -16,6 +16,7 @@ interface StartupScreenProps {
   onLogout?: () => void;
   logo?: string;
   onOpenLogoModal?: () => void;
+  onOpenShortcutModal?: () => void;
 }
 
 export const StartupScreen: React.FC<StartupScreenProps> = ({
@@ -25,7 +26,8 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
   onSelectSystem,
   onLogout,
   logo,
-  onOpenLogoModal
+  onOpenLogoModal,
+  onOpenShortcutModal,
 }) => {
   const [rememberChoice, setRememberChoice] = React.useState<boolean>(false);
   const canAccessMarmitaria = hasPermission(currentUser, 'access_marmitaria');
@@ -82,8 +84,23 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
           </div>
         </div>
 
-        {/* Current Operator Badge & Logout */}
-        <div className="flex items-center space-x-2.5 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-2xl backdrop-blur-md">
+        <div className="flex items-center space-x-2">
+          {/* Botão Atalho do Sistema com Logo Oficial */}
+          {onOpenShortcutModal && (
+            <button
+              id="startup-shortcut-button"
+              type="button"
+              onClick={onOpenShortcutModal}
+              title="Criar Atalho do Sistema na Tela Inicial com a Logo Oficial"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Criar Atalho</span>
+            </button>
+          )}
+
+          {/* Current Operator Badge & Logout */}
+          <div className="flex items-center space-x-2.5 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-2xl backdrop-blur-md">
           <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs border border-amber-500/30 overflow-hidden shrink-0">
             {currentUser.avatar ? (
               <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
@@ -107,6 +124,7 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
               <span className="hidden sm:inline">Trocar Usuário</span>
             </button>
           )}
+          </div>
         </div>
       </header>
 

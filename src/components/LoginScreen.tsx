@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AppUser, SystemModule, DEFAULT_ROLE_PERMISSIONS } from '../types';
 import { 
   User, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, X, 
-  UserPlus, CheckCircle2, KeyRound
+  UserPlus, CheckCircle2, KeyRound, Smartphone
 } from 'lucide-react';
 import { SYSTEM_LOGO_PATH, saveUsers } from '../lib/storage';
 import { BrandLogo } from './BrandLogo';
@@ -15,6 +15,7 @@ interface LoginScreenProps {
   onSelectModule?: (module: SystemModule) => void;
   onAddUser?: (user: AppUser) => void;
   logo?: string;
+  onOpenShortcutModal?: () => void;
 }
 
 export function LoginScreen({ 
@@ -22,7 +23,8 @@ export function LoginScreen({
   onLoginSuccess, 
   onLogFailedAttempt,
   onAddUser,
-  logo
+  logo,
+  onOpenShortcutModal,
 }: LoginScreenProps) {
   const activeUsers = (users || []).filter((u) => u && u.status === 'ativo');
   
@@ -516,10 +518,22 @@ export function LoginScreen({
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="mt-5 text-center text-xs text-slate-400 z-10 flex items-center gap-2">
-        <ShieldCheck className="w-4 h-4 text-emerald-400" />
-        <span>Terminal Seguro Maresia</span>
+      {/* Footer & Atalho */}
+      <footer className="mt-5 text-center text-xs text-slate-400 z-10 flex flex-col items-center gap-2.5">
+        {onOpenShortcutModal && (
+          <button
+            type="button"
+            onClick={onOpenShortcutModal}
+            className="flex items-center gap-1.5 py-1.5 px-3.5 rounded-full bg-slate-800/90 hover:bg-slate-800 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+            <span>Criar Atalho com a Logo no Celular / PC</span>
+          </button>
+        )}
+        <div className="flex items-center gap-2 text-slate-400">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span>Terminal Seguro Maresia</span>
+        </div>
       </footer>
 
       {/* Modal: Opção para Colocar / Cadastrar Nome de Usuário */}

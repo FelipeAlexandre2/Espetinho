@@ -534,11 +534,12 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                     onChange={(e) => {
                       const newCat = e.target.value as Category;
                       const isDrink = newCat === 'bebidas';
+                      const isSkewer = newCat === 'espetos';
                       setFormData({
                         ...formData,
                         category: newCat,
                         unit: isDrink ? 'lata' : (formData.unit === 'lata' || formData.unit === 'garrafa' ? 'unid' : formData.unit),
-                        requiresMeatPoint: isDrink ? false : formData.requiresMeatPoint,
+                        requiresMeatPoint: isSkewer ? formData.requiresMeatPoint : false,
                       });
                     }}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
@@ -837,13 +838,9 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
 
               {/* Toggles */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
-                {formData.category === 'bebidas' ? (
-                  <div className="flex items-center space-x-2 text-xs text-blue-700 bg-blue-50 px-3 py-2 rounded-xl border border-blue-200">
-                    <span>🥤</span>
-                    <span className="font-semibold">Bebidas não necessitam de ponto da carne.</span>
-                  </div>
-                ) : (
-                  <label className="flex items-center space-x-2 cursor-pointer">
+                {/* Opção Ponto da Carne: Somente para espetinhos */}
+                {formData.category === 'espetos' && (
+                  <label className="flex items-center space-x-2 cursor-pointer bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/80">
                     <input
                       type="checkbox"
                       checked={formData.requiresMeatPoint}
@@ -975,8 +972,8 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                 </div>
               </div>
 
-              {/* Meat Point selection if applicable (skewers/meats only, never beverages) */}
-              {!isBeverageProduct(tableModalProduct) && (isSkewerOrMeatProduct(tableModalProduct) || tableModalProduct.requiresMeatPoint) && (
+              {/* Meat Point selection: Somente para espetinhos */}
+              {isSkewerOrMeatProduct(tableModalProduct) && (
                 <div className="space-y-1.5 pt-1">
                   <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide flex items-center gap-1">
                     <Flame className="w-3.5 h-3.5 text-orange-500" />
@@ -1021,8 +1018,7 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                   const itemSubtotal = tableModalProduct.price * tableQuantity;
                   const itemServiceFee = Number((itemSubtotal * 0.1).toFixed(2));
                   const itemTotal = Number((itemSubtotal + itemServiceFee).toFixed(2));
-                  const isDrink = isBeverageProduct(tableModalProduct);
-                  const isSkewer = !isDrink && (isSkewerOrMeatProduct(tableModalProduct) || tableModalProduct.requiresMeatPoint);
+                  const isSkewer = isSkewerOrMeatProduct(tableModalProduct);
 
                   onCreateOrder({
                     tableOrCustomer: targetTable,

@@ -32,58 +32,103 @@ export const isBeverageProduct = (
 };
 
 /**
- * Checks if a product is a skewer (espetinho / espeto) or grilled meat item that requires meat doneness selection.
+ * Checks if a category is strictly for skewers (espetinhos).
  */
-export const isSkewerOrMeatProduct = (
-  product: Product | null | undefined
+export const isSkewerCategory = (category?: string | null): boolean => {
+  if (!category) return false;
+  const cat = category.toLowerCase().trim();
+  return (
+    cat === 'espetos' ||
+    cat === 'espetos_tradicionais' ||
+    cat === 'espetos_especiais' ||
+    cat === 'espetinho' ||
+    cat === 'espetinhos'
+  );
+};
+
+/**
+ * Checks if a product is strictly a skewer (espetinho).
+ * Porções, lanches, pastéis, batatas recheadas, caldos, pratos executivos,
+ * acompanhamentos, marmitas e bebidas NUNCA são espetinhos.
+ */
+export const isSkewerProduct = (
+  product: Product | { category?: string; name?: string } | null | undefined
 ): boolean => {
   if (!product) return false;
-  // If it is a beverage, it is NEVER a skewer/meat
   if (isBeverageProduct(product)) return false;
 
   const cat = (product.category || '').toLowerCase().trim();
   const name = (product.name || '').toLowerCase().trim();
 
-  // Skewer categories
-  if (
-    cat === 'espetos' ||
-    cat === 'espetos_tradicionais' ||
-    cat === 'espetos_especiais' ||
-    cat.includes('espet')
-  ) {
+  // Categorias estritamente NÃO-espetos (mesmo que tenham carne no nome como picanha ou alcatra)
+  const nonSkewerCategories = [
+    'bebidas', 'bebida',
+    'porcoes', 'porções', 'porcao', 'porção',
+    'lanches', 'lanche',
+    'pasteis', 'pastéis', 'pastel',
+    'batatas_recheadas', 'batatas', 'batata',
+    'caldos', 'caldo',
+    'pratos_executivos', 'pratos',
+    'adicionais', 'adicional',
+    'acompanhamentos',
+    'sobremesas', 'sobremesa',
+    'marmitaria', 'marmitas', 'marmita'
+  ];
+
+  if (nonSkewerCategories.some((c) => cat === c || cat.startsWith(c))) {
+    return false;
+  }
+
+  // Verifica categoria de espetos
+  if (isSkewerCategory(cat)) {
     return true;
   }
 
-  // Skewer names
+  // Se a categoria for genérica ou vazia, confere se o nome é explicitamente um espeto
   if (
-    name.includes('espet') ||
-    name.includes('jantinha') ||
-    name.includes('kafta') ||
-    name.includes('medalhão') ||
-    name.includes('medalhao') ||
-    name.includes('picanha') ||
-    name.includes('alcatra') ||
-    name.includes('contra filé') ||
-    name.includes('contra file') ||
-    name.includes('maminha') ||
-    name.includes('fraldinha') ||
-    name.includes('cupim') ||
-    name.includes('ancho') ||
-    name.includes('chorizo')
-  ) {
-    return true;
-  }
-
-  // If explicitly flagged and not a beverage or non-meat side dish
-  if (
-    product.requiresMeatPoint &&
-    cat !== 'bebidas' &&
-    cat !== 'adicionais' &&
-    cat !== 'acompanhamentos' &&
-    cat !== 'sobremesas'
+    name.startsWith('espeto ') ||
+    name.startsWith('espetinho ') ||
+    name.includes('espeto ') ||
+    name.includes('espetinho ')
   ) {
     return true;
   }
 
   return false;
 };
+
+/**
+ * Checks if a product is a skewer (espetinho) that requires meat doneness (Ponto da Carne).
+ * REGRA: Essa opção deve aparecer SOMENTE nos espetinhos.
+ * Não aparece para porções, lanches, pastéis, batatas, caldos, adicionais ou bebidas.
+ * Também não aparece para itens que não são de carne (queijo coalho, pão de alho, doces).
+ */
+export const isSkewerOrMeatProduct = (
+  product: Product | { category?: string; name?: string; requiresMeatPoint?: boolean } | null | undefined
+): boolean => {
+  if (!product) return false;
+
+  // 1. Deve ser ESTRITAMENTE um espetinho
+  if (!isSkewerProduct(product)) {
+    return false;
+  }
+
+  const name = (product.name || '').toLowerCase().trim();
+
+  // 2. Itens que não são carne (queijo coalho, pão de alho, doces, vegetariano) não possuem ponto de carne
+  if (
+    name.includes('queijo coalho') ||
+    (name.includes('queijo') && !name.includes('carne')) ||
+    name.includes('pão de alho') ||
+    name.includes('pao de alho') ||
+    name.includes('doce') ||
+    name.includes('morango') ||
+    name.includes('brigadeiro') ||
+    name.includes('vegetariano')
+  ) {
+    return false;
+  }
+
+  return true;
+};
+

@@ -120,8 +120,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
   const handleAddToCart = () => {
     if (!selectedProduct) return;
 
-    const isDrink = isBeverageProduct(selectedProduct);
-    const isSkewer = !isDrink && (isSkewerOrMeatProduct(selectedProduct) || selectedProduct.requiresMeatPoint);
+    const isSkewer = isSkewerOrMeatProduct(selectedProduct);
 
     const newItem: CartItem = {
       id: `cart-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -570,8 +569,8 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
                 {selectedProduct.description || 'Grelhado artesanal preparado na brasa com tempero do chefe.'}
               </p>
 
-              {/* Meat Point Selector (if skewer/meat, never for beverages) */}
-              {!isBeverageProduct(selectedProduct) && (isSkewerOrMeatProduct(selectedProduct) || selectedProduct.requiresMeatPoint) && (
+              {/* Meat Point Selector: Somente para espetinhos */}
+              {isSkewerOrMeatProduct(selectedProduct) && (
                 <div className="space-y-2 bg-slate-800/70 border border-slate-750 p-3.5 rounded-2xl">
                   <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
                     <span>🥩</span>

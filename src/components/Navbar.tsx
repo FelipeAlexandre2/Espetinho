@@ -4,7 +4,7 @@ import {
   UtensilsCrossed, Utensils, ClipboardList, Flame, DollarSign, Lock, Unlock, 
   TrendingUp, Sparkles, Package, BarChart3, Users, UserCheck, Shield, History,
   LogOut, CheckCircle2, KeyRound, X, ChevronDown, ChefHat, RefreshCw, LayoutGrid,
-  Settings, ChevronRight, Printer
+  Settings, ChevronRight, Printer, Smartphone
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
@@ -28,6 +28,7 @@ interface NavbarProps {
   onOpenLogoModal?: () => void;
   onOpenUsbPrintStation?: () => void;
   isUsbPrintingActive?: boolean;
+  onOpenShortcutModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -50,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenLogoModal,
   onOpenUsbPrintStation,
   isUsbPrintingActive = true,
+  onOpenShortcutModal,
 }) => {
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -248,6 +250,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Printer className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="hidden md:inline">Impressora USB 58mm</span>
                 <span className={`w-2 h-2 rounded-full ${isUsbPrintingActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              </button>
+            )}
+
+            {/* Botão Atalho do Sistema com Logo Oficial */}
+            {onOpenShortcutModal && (
+              <button
+                id="navbar-btn-shortcut"
+                type="button"
+                onClick={onOpenShortcutModal}
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Criar Atalho do Sistema na Tela Inicial com a Logo Oficial"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden lg:inline">Atalho</span>
               </button>
             )}
 
@@ -567,6 +583,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </div>
                     </div>
                   </button>
+
+                  {/* Opção 3: Criar Atalho na Tela Inicial com Logo */}
+                  {onOpenShortcutModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenShortcutModal();
+                        setIsDesktopSettingsOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer text-slate-300 hover:text-white hover:bg-slate-800/80 border-t border-slate-800/80 mt-1"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 shrink-0">
+                          <Smartphone className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold leading-tight">Atalho com a Logo</p>
+                          <p className="text-[10px] text-slate-400">Instalar na tela de início</p>
+                        </div>
+                      </div>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1172,6 +1210,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <LayoutGrid className="w-4 h-4 text-orange-400" />
                     <span className="text-xs font-bold">Alternar Módulo / Hub de Sistemas</span>
+                  </button>
+                )}
+
+                {/* Criar Atalho na Tela Inicial com Logo */}
+                {onOpenShortcutModal && (
+                  <button
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      onOpenShortcutModal();
+                    }}
+                    className="col-span-2 flex items-center justify-center space-x-2 p-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 transition cursor-pointer text-center active:scale-98"
+                  >
+                    <Smartphone className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold">Criar Atalho com a Logo Oficial</span>
                   </button>
                 )}
               </div>

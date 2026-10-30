@@ -810,8 +810,12 @@ async function startServer() {
 
         fs.writeFileSync(path.join(publicLogoDir, 'capa.png'), buffer);
         fs.writeFileSync(path.join(process.cwd(), 'public', 'capa.png'), buffer);
+        fs.writeFileSync(path.join(process.cwd(), 'public', 'apple-touch-icon.png'), buffer);
+        fs.writeFileSync(path.join(process.cwd(), 'public', 'pwa-192x192.png'), buffer);
+        fs.writeFileSync(path.join(process.cwd(), 'public', 'pwa-512x512.png'), buffer);
+        fs.writeFileSync(path.join(process.cwd(), 'public', 'favicon.png'), buffer);
         fs.writeFileSync(path.join(rootLogoDir, 'capa.png'), buffer);
-        console.log('✅ Capa do sistema salva com sucesso em public/logo/capa.png');
+        console.log('✅ Capa do sistema e ícones de atalho salvos com sucesso.');
         return res.json({ success: true, path: '/logo/capa.png' });
       }
 
@@ -822,7 +826,12 @@ async function startServer() {
     }
   });
 
-  // Explicit static routes for GitHub logo & photos directory
+  // Explicit static routes for GitHub logo, public icons, manifest & photos directory
+  app.use(express.static(path.join(process.cwd(), 'public')));
+  app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.sendFile(path.join(process.cwd(), 'public', 'manifest.json'));
+  });
   app.use('/logo', express.static(path.join(process.cwd(), 'public', 'logo')));
   app.use('/logo', express.static(path.join(process.cwd(), 'logo')));
   app.use('/fotos-sistema', express.static(path.join(process.cwd(), 'public', 'fotos-sistema')));

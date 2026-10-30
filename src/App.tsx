@@ -46,6 +46,8 @@ import { AccessDeniedView } from './components/AccessDeniedView';
 import { CustomerMenu } from './components/CustomerMenu';
 import { LogoModal } from './components/LogoModal';
 import { UsbPrintStationModal } from './components/UsbPrintStationModal';
+import { ShortcutInstallModal } from './components/ShortcutInstallModal';
+import { updateAppShortcutLogo } from './hooks/usePWAInstall';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('caixa');
@@ -85,10 +87,18 @@ export default function App() {
   // Logo e Capa oficial do Maresia (carregada do GitHub ou personalizada)
   const [logo, setLogo] = useState<string>(() => loadMaresiaLogo());
   const [isLogoModalOpen, setIsLogoModalOpen] = useState<boolean>(false);
+  const [isShortcutModalOpen, setIsShortcutModalOpen] = useState<boolean>(false);
+
+  // Sincroniza dinamicamente o ícone do atalho (Favicon, Apple Touch Icon e Web Manifest)
+  // com a logo ativa do sistema
+  useEffect(() => {
+    updateAppShortcutLogo(logo);
+  }, [logo]);
 
   const handleSaveLogo = (newLogo: string) => {
     saveMaresiaLogo(newLogo);
     setLogo(newLogo);
+    updateAppShortcutLogo(newLogo);
     addAuditLog(
       'sistema',
       'sistema_config_alterada',
@@ -1305,13 +1315,21 @@ export default function App() {
   // Render dedicated Login Screen when user is not authenticated (Password/PIN required first!)
   if (!isAuthenticated) {
     return (
-      <LoginScreen
-        users={users}
-        onLoginSuccess={handleLoginSuccess}
-        onLogFailedAttempt={handleLogFailedAttempt}
-        onAddUser={handleAddUser}
-        logo={logo}
-      />
+      <>
+        <LoginScreen
+          users={users}
+          onLoginSuccess={handleLoginSuccess}
+          onLogFailedAttempt={handleLogFailedAttempt}
+          onAddUser={handleAddUser}
+          logo={logo}
+          onOpenShortcutModal={() => setIsShortcutModalOpen(true)}
+        />
+        <ShortcutInstallModal
+          isOpen={isShortcutModalOpen}
+          onClose={() => setIsShortcutModalOpen(false)}
+          logo={logo}
+        />
+      </>
     );
   }
 
@@ -1331,6 +1349,7 @@ export default function App() {
           onLogout={handleLogout}
           logo={logo}
           onOpenLogoModal={isAdminUser ? () => setIsLogoModalOpen(true) : undefined}
+          onOpenShortcutModal={() => setIsShortcutModalOpen(true)}
         />
         {isAdminUser && (
           <LogoModal
@@ -1340,6 +1359,11 @@ export default function App() {
             onSaveLogo={handleSaveLogo}
           />
         )}
+        <ShortcutInstallModal
+          isOpen={isShortcutModalOpen}
+          onClose={() => setIsShortcutModalOpen(false)}
+          logo={logo}
+        />
       </>
     );
   }
@@ -1370,6 +1394,7 @@ export default function App() {
           setIsUsbModalOpen(true);
         }}
         isUsbPrintingActive={isAutoPrintEnabled}
+        onOpenShortcutModal={() => setIsShortcutModalOpen(true)}
       />
 
       {/* Floating Alert: Auto-printed mobile order notification banner */}
@@ -1618,6 +1643,13 @@ export default function App() {
         onToggleSound={handleToggleSound}
         recentJobs={recentPrintJobs}
         onRefreshJobs={handleRefreshPrintJobs}
+      />
+
+      {/* Modal de Atalho do Sistema com a Logo Oficial */}
+      <ShortcutInstallModal
+        isOpen={isShortcutModalOpen}
+        onClose={() => setIsShortcutModalOpen(false)}
+        logo={logo}
       />
     </div>
   );

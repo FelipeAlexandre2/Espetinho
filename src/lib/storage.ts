@@ -1,6 +1,7 @@
 import { Product, StockItem, Order, CashShift, AppUser, SystemLog, DEFAULT_ROLE_PERMISSIONS, MarmitaOption, MarmitaSizeConfig, MarmitaOrder, MarmitaSettings, SystemModule, SystemPermission, UserRole, MarmitaDailyMenu, DayOfWeekKey, PrintJob } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_STOCK, INITIAL_ORDERS, INITIAL_CASH_SHIFT, INITIAL_USERS, INITIAL_LOGS } from '../data/mockData';
 import { INITIAL_MARMITA_OPTIONS, INITIAL_MARMITA_SIZES, INITIAL_MARMITA_ORDERS, INITIAL_MARMITA_SETTINGS, INITIAL_DAILY_MENUS } from '../data/marmitariaData';
+import { isSkewerOrMeatProduct } from '../utils/productUtils';
 
 const KEYS = {
   PRODUCTS: 'maresia_products_v2',
@@ -65,13 +66,15 @@ export function loadProducts(): Product[] {
     if (!data) return INITIAL_PRODUCTS;
     const parsed: Product[] = JSON.parse(data);
     
-    // Ensure all products have updated photoUrls
+    // Ensure all products have updated photoUrls and requiresMeatPoint strictly on espetinhos
     const updated = parsed.map((p) => {
       const match = INITIAL_PRODUCTS.find((initP) => initP.id === p.id);
-      if (match && match.photoUrl) {
-        return { ...p, photoUrl: match.photoUrl };
-      }
-      return p;
+      const isSkewer = isSkewerOrMeatProduct(p);
+      return {
+        ...p,
+        photoUrl: (match && match.photoUrl) ? match.photoUrl : p.photoUrl,
+        requiresMeatPoint: isSkewer ? (p.requiresMeatPoint ?? true) : false,
+      };
     });
 
     // Merge any missing initial products (e.g. QA Test Product)

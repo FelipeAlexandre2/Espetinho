@@ -211,8 +211,7 @@ export const PedidosEstoqueTab: React.FC<PedidosEstoqueTabProps> = ({
 
   // Order Item Handlers for New Order Modal
   const handleSelectProductForNewOrder = (product: Product) => {
-    const isDrink = isBeverageProduct(product);
-    const isSkewer = !isDrink && (isSkewerOrMeatProduct(product) || product.requiresMeatPoint);
+    const isSkewer = isSkewerOrMeatProduct(product);
     if (isSkewer) {
       setSelectedProdForMeat(product);
       setSelectedMeatPoint('ao_ponto');
@@ -1499,7 +1498,7 @@ export const PedidosEstoqueTab: React.FC<PedidosEstoqueTabProps> = ({
                         <div className="font-extrabold text-slate-900 text-xs line-clamp-1 group-hover:text-red-600">
                           {p.name}
                         </div>
-                        {p.requiresMeatPoint && (
+                        {isSkewerOrMeatProduct(p) && (
                           <span className="text-[9px] text-red-600 bg-red-50 border border-red-200 px-1 py-0.2 rounded font-bold inline-block mt-0.5">
                             🥩 Ponto
                           </span>

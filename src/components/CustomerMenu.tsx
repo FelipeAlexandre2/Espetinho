@@ -460,7 +460,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
                       Esgotado
                     </div>
                   )}
-                  {product.requiresMeatPoint && product.isAvailable && (
+                  {isSkewerOrMeatProduct(product) && product.requiresMeatPoint && product.isAvailable && (
                     <span className="absolute bottom-1 right-1 bg-red-600/90 text-white text-[9px] font-black px-1 py-0.5 rounded shadow">
                       🥩 Brasa
                     </span>

@@ -1,3 +1,4 @@
+import { isSkewerOrMeatProduct } from './src/utils/productUtils';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -371,7 +372,7 @@ async function startServer() {
   });
 
   app.post('/api/products', async (req, res) => {
-    const item = req.body;
+    const item = { ...req.body, requiresMeatPoint: !!req.body.requiresMeatPoint && isSkewerOrMeatProduct(req.body) };
     if (!item.id) {
       item.id = 'prod-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     }
@@ -397,7 +398,7 @@ async function startServer() {
 
   app.put('/api/products/:id', async (req, res) => {
     const { id } = req.params;
-    const item = { ...req.body, id };
+    const item = { ...req.body, id, requiresMeatPoint: !!req.body.requiresMeatPoint && isSkewerOrMeatProduct(req.body) };
     const index = memoryProducts.findIndex((p) => p.id === id);
     if (index >= 0) {
       memoryProducts[index] = { ...memoryProducts[index], ...item };

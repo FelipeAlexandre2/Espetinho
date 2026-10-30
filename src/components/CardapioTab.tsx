@@ -353,7 +353,7 @@ export const CardapioTab: React.FC<CardapioTabProps> = ({
                   </div>
 
                   {/* Meat Point badge if applicable */}
-                  {product.requiresMeatPoint && (
+                  {isSkewerOrMeatProduct(product) && product.requiresMeatPoint && (
                     <div className="absolute top-2.5 left-2.5 bg-slate-900/90 text-red-400 font-bold px-2 py-0.5 rounded-lg text-[10px] backdrop-blur-sm border border-slate-800 flex items-center gap-1">
                       <Flame className="w-3 h-3 fill-red-400" />
                       <span>Escolhe Ponto</span>

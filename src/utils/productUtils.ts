@@ -115,6 +115,9 @@ export const isSkewerOrMeatProduct = (
 
   const name = (product.name || '').toLowerCase().trim();
 
+  // Combos e acompanhamentos podem estar na categoria legada de espetos.
+  if (name.startsWith('adicional ') || name.startsWith('jantinha ') || name.includes('farofa') || name.includes('arroz') || name.includes('vinagrete') || name.includes('mandioca') || name.includes('creme de alho')) return false;
+
   // 2. Itens que não são carne (queijo coalho, pão de alho, doces, vegetariano) não possuem ponto de carne
   if (
     name.includes('queijo coalho') ||
